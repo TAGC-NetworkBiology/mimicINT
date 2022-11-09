@@ -1,0 +1,1712 @@
+
+import os
+
+###############################################
+## Snakefile for the project "tagc-mimicint" ##
+###############################################
+##    it runs the pipeline in singularity    ##
+###############################################
+
+# ===========================================
+# Information about the pipeline execution 
+# and the options
+# ===========================================
+
+# Four singularity images are used by this pipeline:
+# - tagc-mimicint-data-parse.img: a generic for input processing and output parsing
+# - tagc-mimicint-domain-detect.img: it provides the environment for running InterProScan and detect Pfam domains
+# - tagc-mimicint-slim-detect.img: required for running the motif detection through the SLiMProb tool
+# - tagc-mimicint-r.img: required for gProfiler
+
+# Several parameters necessary to run the rules may be provided 
+# by the user in the config file. For some of these parameters, 
+# several values may be provided as a semi-colon separated list.
+# In such case, the rule affected by the option will be run one
+# time for each of the provided value and all the "downstream" 
+# rules will be run as time as necessary for all the different
+# options affecting it. In order to avoid any confusion in outputs,
+# the name of the parameter and its values will be used to name
+# the output folders of all "downstream" rules.
+
+# Some options give the user the possibility to define the names 
+# of certain output folders. In such case a part of the string 
+# has to contain the "{param_name}" expression for each "param_name"
+# parameter where several values have been defined in the upstream 
+# rules.
+
+# The query_fasta_file parameters is particular:
+# - either the user can provide a single string corresponding
+#   to the path of the query sequences fasta file,
+# - or, the user can provide a string containing the 
+#   "{query_names}" string in the path to the files 
+#   AND a semi-colon separated list to provide the part of the 
+#   string that changes using the query_names options.
+#   e.g.
+#        - query_fasta_file: input/sequences/cov/{query_names}.fasta
+#        - query_names: HCoV-229E;HCoV-OC43;SARS-CoV-2
+
+
+### Load parameters from the configuration file ###
+configfile: "mimicINT_InterPro/config/config.yaml"
+
+
+# ===========================================
+# Options
+# ===========================================
+
+# Default values for options
+# --------------------------
+
+# Default option values for rules
+  # Default run ID
+DEFAULT_RUN_ID = "MimicInt_InterPro"
+
+  # Default target species
+DEFAULT_TARGET_SPECIES_SHORT = "hsapiens"
+
+  # Domain detection default options
+DOMAIN_DETECTION_DEFAULT_OPTIONS = { "score_threshold_interpro_query": 0.00001 }
+
+  # ELM parser default options
+ELM_PARSER_DEFAULT_OPTIONS = { "pval_threshold_elm_parser": 0.01 }
+
+  # ELM filter default options
+ELM_FILTER_DEFAULT_OPTIONS = { "pval_threshold_elm_filter": 0.05,
+                               "slim_pvalues_v2_file": '' }
+
+  # SLiMProb default options
+SLIMPROB_DEFAULT_OPTIONS = { "orthodb_fasta_file": "",
+                             "maxsize": 1000000000, 
+                             "maxseq": 10000, 
+                             "iumethod": "short",
+                             "iucut": 0.2,
+                             "minregion": 10,
+                             "conservation_analysis": False }
+
+  # Maximum number of sequence per fasta file (for query splitted files)
+SPLIT_QUERY_DATASET_DEFAULT_OPTIONS = { "max_seq_per_fasta": 3200 }
+
+  # Domain score filter default options
+DOMAIN_SCORE_FILTER_DEFAULT_OPTIONS = { "domain_score_filter": "A",
+                                        "domain_score_threshold": 0.4,
+                                        "domain_score_position": False,
+                                        "domain_score_overlap_dscore_to_dmi": 0.8,
+                                        "domain_score_overlap_dmi_to_dscore": 0.8,
+                                        "domain_score_file": '' }
+
+  # gProfiler default options
+GPROFILER_DEFAULT_OPTIONS = { "gprofiler_url": "http://biit.cs.ut.ee/gprofiler",
+                              "gprofiler_sources": "GO",
+                              "gprofiler_correction_method": "fdr",
+                              "gprofiler_signif_threshold": 0.01 }
+
+  # List of options for which several values may be provided
+MULTIPLE_VALUES_ALLOWED_OPTIONS = [ "query_names",
+                                    "pval_threshold_elm_parser",
+                                    "pval_threshold_elm_filter",
+                                    "score_threshold_interpro_query",
+                                    "iumethod",
+                                    "iucut",
+                                    "minregion",
+                                    "conservation_analysis",
+                                    "domain_score_filter",
+                                    "domain_score_threshold",
+                                    "domain_score_position",
+                                    "domain_score_overlap_dscore_to_dmi",
+                                    "domain_score_overlap_dmi_to_dscore",
+                                    "gprofiler_correction_method",
+                                    "gprofiler_signif_threshold" ]
+  # Separator to use when several values are provided
+MULTIPLE_VALUES_OPTION_SEPARATOR = ";"
+
+  # Simplify the sequence names in the output files
+SIMPLIFY_OUTPUT_SEQUENCE_NAMES_DEFAULT = False
+
+
+# Set missing options values
+# --------------------------
+
+# Set RUN ID
+opt = "run_id"
+if opt not in config:
+    config[ opt ] = DEFAULT_RUN_ID
+
+# Domain detect options
+for opt in DOMAIN_DETECTION_DEFAULT_OPTIONS.keys():
+    if opt not in config.keys():
+        config[ opt ] = DOMAIN_DETECTION_DEFAULT_OPTIONS[ opt ]
+        
+# ELM parser options
+for opt in ELM_PARSER_DEFAULT_OPTIONS.keys():
+    if opt not in config.keys():
+        config[ opt ] = ELM_PARSER_DEFAULT_OPTIONS[ opt ]
+        
+# ELM filter options
+for opt in ELM_FILTER_DEFAULT_OPTIONS.keys():
+    if opt not in config.keys():
+        config[ opt ] = ELM_FILTER_DEFAULT_OPTIONS[ opt ]
+
+# SLiMProb options
+for opt in SLIMPROB_DEFAULT_OPTIONS.keys():
+    if opt not in config.keys():
+        config[ opt ] = SLIMPROB_DEFAULT_OPTIONS[ opt ]
+        
+# Split query dataset options
+for opt in SPLIT_QUERY_DATASET_DEFAULT_OPTIONS.keys():
+    if opt not in config.keys():
+        config[ opt ] = SPLIT_QUERY_DATASET_DEFAULT_OPTIONS[ opt ]
+        
+# Domain score filter options
+for opt in DOMAIN_SCORE_FILTER_DEFAULT_OPTIONS.keys():
+    if opt not in config.keys():
+        config[ opt ] = DOMAIN_SCORE_FILTER_DEFAULT_OPTIONS[ opt ]
+        
+# Simplify the sequence names in the output files
+opt = "simplify_seq_names"
+if opt not in config:
+    config[ opt ] = SIMPLIFY_OUTPUT_SEQUENCE_NAMES_DEFAULT
+        
+# gProfiler options
+for opt in GPROFILER_DEFAULT_OPTIONS.keys():
+    if opt not in config.keys():
+        config[ opt ] = GPROFILER_DEFAULT_OPTIONS[ opt ]
+
+
+# Parse the options with several values
+# -------------------------------------
+
+for opt in MULTIPLE_VALUES_ALLOWED_OPTIONS:
+    if ( ( opt in config.keys() )
+         and ( isinstance( config[ opt ], str ) ) ):
+        opt_values = config[ opt ].split( MULTIPLE_VALUES_OPTION_SEPARATOR )
+        if ( len( opt_values ) > 1 ):
+            config[ opt ] = opt_values
+
+# Convert the "conservation_analysis" option into boolean
+cons_opt = config.get( "conservation_analysis" )
+if cons_opt:
+    if isinstance( cons_opt, str ):
+        config[ "conservation_analysis" ] = eval( cons_opt )
+    elif isinstance( cons_opt, list ):
+        config[ "conservation_analysis" ] = [ eval( val ) for val in cons_opt ]
+        
+# As the ortholog database is not declared as input in 
+# the detect_slim_query rule, make sure the file is 
+# provided if the conservation analysis is expected 
+# to be run
+cons_opt = config.get( "conservation_analysis" )
+if ( ( cons_opt == True ) or ( isinstance( cons_opt, list) and ( True in cons_opt ) ) ):
+    if not os.path.exists( config[ "orthodb_fasta_file" ] ):
+        raise Exception( "As a conservation analysis is expected to be run, \
+                          an ortholog database fasta file has to be provided.")
+
+# Convert the "domain_score_position" option into boolean
+ds_opt = config.get( "domain_score_position" )
+if ds_opt:
+    if isinstance( ds_opt, str ):
+        config[ "domain_score_position" ] = eval( ds_opt )
+    elif isinstance( ds_opt, list ):
+        config[ "domain_score_position" ] = [ eval( val ) for val in ds_opt ]
+            
+
+
+# ===========================================
+# Directory and file names
+# ===========================================
+
+# Output directories
+# ------------------
+
+# If no output folder is provided in the config file,
+# define one by default
+if ( "output_folder" not in config.keys() ):
+    config[ "output_folder" ] = "output"
+
+# Define output directory and file paths
+output_folders = {}
+output_files = {}
+
+# Define a dictionary with the path to the placeholder 
+# files to generate when rules start and end
+# Placeholder files are named
+job_status_folder = config.get( "job_status_folder" )
+if job_status_folder:
+    job_status_folder = job_status_folder
+else:
+    job_status_folder = "job_status"
+    
+if not os.path.exists( job_status_folder ):
+    os.makedirs( job_status_folder )
+
+PLACEHOLDER_STEPS = [ "start", "end" ]
+placeholder_files = {}
+rule_names = [ "parse_3did", "ddi_template_pfam_to_interpro",
+               "parse_elm", "filter_elm",
+               "elm_domain_interactions_to_interpro",
+               "get_target_prot_with_potential_interactions",
+               "detect_domain_query", "parse_domain_query", 
+               "split_query_dataset", "detect_slim_query", "aggregate_detect_slim_query_output",
+               "match_query_sqce_names", "parse_slim_query", "compute_query_disorder_propensity", 
+               "interaction_inference", "filter_dmi_on_domain_score", "extract_binary_interactions",
+               "generate_json_interaction_inference",
+               "generate_json_query_features",
+               "simplify_sequence_names",
+               "target_enrichment_gprofiler" ]
+for rule in rule_names:
+    for step in PLACEHOLDER_STEPS:
+        placeholder_files[ step + "_" + rule ] = os.path.join( job_status_folder, step + "_" + rule )
+
+# Add a placeholder to be generated at the end of the workflow
+placeholder_files[ "END_WORKFLOW" ] = os.path.join( job_status_folder, "END_WORKFLOW" )
+
+
+# Text file containing all the parameters provided by the user
+# or automatically set by the pipeline
+param_file = config.get( "log_parameters_file" )
+if param_file:
+    output_files[ "log_parameters_file" ] = param_file
+else:
+    output_files[ "log_parameters_file" ] = os.path.join( "log", "parameters.tsv" )
+
+# Instantiate all the output folder paths
+output_folders[ "0_parse_3did" ] = os.path.join( config[ "output_folder" ], "0_parse_3did" )
+output_folders[ "1_parse_elm" ] = os.path.join( config[ "output_folder" ], "1_parse_elm" )
+output_folders[ "2_target_with_dom_in_templates" ] = os.path.join( config[ "output_folder" ], "2_target_with_dom_in_templates" )
+output_folders[ "3_detect_domain_query" ] = os.path.join( config[ "output_folder" ], "3_detect_domain_query" )
+output_folders[ "splitted_query" ] = os.path.join( config[ "output_folder" ], "4_splitted_query" )
+output_folders[ "4_slim_detect" ] = os.path.join( config[ "output_folder" ], "4_slim_detect" )
+output_folders[ "5_interactions" ] = os.path.join( config[ "output_folder" ], "5_interactions" )
+output_folders[ "6_summary" ] = os.path.join( config[ "output_folder" ], "6_summary" )
+output_folders[ "7_renamed_sequences" ] = os.path.join( config[ "output_folder" ], "7_renamed_sequences" )
+output_folders[ "8_gprofiler" ] = os.path.join( config[ "output_folder" ], "8_gprofiler" )
+# NB: The following rules are using one of the previously
+#     defined path as output folder:
+#     - filter_elm (1_parse_elm)
+#     - parse_domain_target (2_parsed_domain_target)
+#     - parse_domain_query (3_parsed_domain_query)
+#     - parse_slim_query (4_parse_slim_query)
+#     - compute_query_disorder_propensity (4_query_disorder_propensity)
+#     - filter_dmi_on_domain_score (5_interactions)
+#     - extract_binary_interactions (5_filtered_interactions)
+#     - generate_json_interaction_inference (5_interactions_json)
+#     - generate_json_query_features (6_summary)
+#     - simplify_sequence_names (7_renamed_sequences, Optional rule)
+#     - target_enrichment_gprofiler (8_gprofiler)
+
+
+# Include query name in the appropriate output 
+# folder if several query sequence files are provided
+query_list = config.get( "query_names" )
+if query_list:
+    for out_fold_name in [ "splitted_query", "3_detect_domain_query", "4_slim_detect", 
+                           "5_interactions", "6_summary", "7_renamed_sequences", "8_gprofiler" ]:
+        output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "{query_names}" )
+else:
+    config[ "query_names" ] = ""
+
+# Update placeholders
+if query_list:
+    for step in PLACEHOLDER_STEPS:
+        for pl_file in [ "split_query_dataset", "detect_slim_query", "aggregate_detect_slim_query_output", 
+                         "match_query_sqce_names", "compute_query_disorder_propensity", "parse_slim_query", 
+                         "detect_domain_query", "parse_domain_query", "interaction_inference", 
+                         "filter_dmi_on_domain_score", "extract_binary_interactions",
+                         "generate_json_interaction_inference", "generate_json_query_features", 
+                         "simplify_sequence_names", "target_enrichment_gprofiler" ]:
+            placeholder_files[ step + "_" + pl_file ] += "_{query_names}"
+      
+  
+# Rule parse_3did
+# ---------------
+out_fold = config.get( "output_folder_3did" )
+if out_fold:
+    output_folders[ "0_parse_3did" ] = out_fold
+# NB: No parameters could be provided for this rule
+output_files[ "ddi_template_parsed_file" ] = os.path.join( output_folders[ "0_parse_3did" ], "parsed_3did.txt" )
+
+
+# Rule ddi_template_pfam_to_interpro
+# ----------------------------------
+output_folders[ "ddi_template_interpro" ] = output_folders[ "0_parse_3did" ]
+# NB: No parameters could be provided for this rule
+output_files[ "ddi_template_interpro_file" ] = os.path.join( output_folders[ "ddi_template_interpro" ], "parsed_3did_interpro.txt" )
+
+
+# Rule parse_elm
+# --------------
+out_fold = config.get( "output_folder_elm" )
+if out_fold:
+    output_folders[ "1_parse_elm" ] = out_fold
+else:  
+    # 1 parameter could be set for this rule: 
+    # - pval_threshold_elm_parser
+    if ( isinstance( config[ "pval_threshold_elm_parser" ], list ) ):
+        # If there are several values provided for this parameter, then the 
+        # following folder paths will be affected
+        for out_fold_name in [ "1_parse_elm", "4_slim_detect", "5_interactions", "6_summary", 
+                               "7_renamed_sequences", "8_gprofiler" ]:
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "pval_threshold_elm_parser_{pval_threshold_elm_parser}" )
+        
+output_files[ "elm_motifs_parsed_file" ] = os.path.join( output_folders[ "1_parse_elm" ], "parsed_elm_classes.txt" )
+output_files[ "elm_summary_parsed_file" ] = os.path.join( output_folders[ "1_parse_elm" ], "parsed_elm_summary.tsv" )
+
+# Update placeholders
+if ( isinstance( config[ "pval_threshold_elm_parser" ], list ) ):
+    for step in PLACEHOLDER_STEPS:
+        for pl_file in [ "parse_elm", "detect_slim_query", "match_query_sqce_names", "compute_query_disorder_propensity", 
+                         "parse_slim_query", "interaction_inference", "filter_dmi_on_domain_score", "extract_binary_interactions",
+                         "generate_json_interaction_inference", "generate_json_query_features", 
+                         "simplify_sequence_names", "target_enrichment_gprofiler" ]:
+            placeholder_files[ step + "_" + pl_file ] += "_pval_threshold_elm_parser_{pval_threshold_elm_parser}"
+
+
+# Rule filter_elm
+# ---------------
+output_folders[ "1_filter_elm" ] = output_folders[ "1_parse_elm" ]
+        
+output_files[ "elm_motifs_filtered_file" ] = os.path.join( output_folders[ "1_parse_elm" ], "elm_motifs_filtered.txt" )
+output_files[ "elm_motifs_selected_file" ] = os.path.join( output_folders[ "1_parse_elm" ], "elm_motifs_selected.tsv" )
+
+# Update placeholders
+if ( isinstance( config[ "pval_threshold_elm_filter" ], list ) ):
+    for step in PLACEHOLDER_STEPS:
+        for pl_file in [ "filter_elm", "detect_slim_query", "match_query_sqce_names", "compute_query_disorder_propensity", 
+                         "parse_slim_query", "interaction_inference", "filter_dmi_on_domain_score", "extract_binary_interactions",
+                         "generate_json_interaction_inference", "generate_json_query_features",
+                         "simplify_sequence_names", "target_enrichment_gprofiler" ]:
+            placeholder_files[ step + "_" + pl_file ] += "_pval_threshold_elm_filter_{pval_threshold_elm_filter}"
+
+
+# Rule elm_domain_interactions_to_interpro
+# ----------------------------------------
+output_folders[ "elm_domain_interactions_interpro" ] = output_folders[ "1_parse_elm" ]
+# NB: No parameters could be provided for this rule
+output_files[ "elm_interaction_domains_interpro_file" ] = os.path.join( output_folders[ "elm_domain_interactions_interpro" ], "elm_domain_interactions_interpro.tsv" )
+
+
+# Rule get_target_prot_with_potential_interactions
+# ------------------------------------------------
+# NB: No parameters could be provided for this rule
+output_files[ "target_with_domains_with_templates_of_inter" ] = os.path.join( output_folders[ "2_target_with_dom_in_templates" ], "target_with_domains_with_templates_of_inter.tsv")
+
+
+# Rule detect_domain_query
+# ------------------------
+out_fold = config.get( "output_folder_domain_query" )
+if out_fold:
+    output_folders[ "3_detect_domain_query" ] = out_fold
+# NB: No parameter could be provided for this rule
+        
+output_files[ "query_domain_file" ] = os.path.join( output_folders[ "3_detect_domain_query" ], "query_domain_interpro.tsv" )
+
+# Rule parse_domain_query
+# -----------------------
+output_folders[ "3_parsed_domain_query" ] = output_folders[ "3_detect_domain_query" ]
+# 1 parameter could be set for this rule:
+# - score_threshold_interpro_query
+if ( isinstance( config[ "score_threshold_interpro_query" ], list ) ):
+    # If there are several values provided for this parameter, then the 
+    # following folder paths will be affected    
+    for out_fold_name in [ "3_parsed_domain_query", "5_interactions", "6_summary", "7_renamed_sequences", 
+                           "8_gprofiler" ]:
+        output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "score_threshold_interpro_query_{score_threshold_interpro_query}" )
+        
+output_files[ "query_domain_parsed_file" ] = os.path.join( output_folders[ "3_parsed_domain_query" ], "parsed_query_domain_interpro.tsv" )
+
+# Update placeholders
+if ( isinstance( config[ "score_threshold_interpro_query" ], list ) ):
+    for step in PLACEHOLDER_STEPS:
+        for pl_file in [ "parse_domain_query", "interaction_inference", "filter_dmi_on_domain_score",
+                         "extract_binary_interactions",
+                         "generate_json_interaction_inference", "generate_json_query_features", 
+                         "simplify_sequence_names", "target_enrichment_gprofiler" ]:
+            placeholder_files[ step + "_" + pl_file ] += "_score_threshold_interpro_query_{score_threshold_interpro_query}"
+  
+  
+# Checkpoint split_query_dataset
+# ------------------------------
+out_fold = config.get( "splitted_query" )
+if out_fold:
+    output_folders[ "splitted_query" ] = out_fold
+    
+output_files[ "splitted_query_fasta_file" ] = os.path.join( output_folders[ "splitted_query" ], 
+                                                            "{file_suffix}.fasta" )
+
+
+# Rule detect_slim_query
+# ----------------------
+out_fold = config.get( "output_folder_slim_query" )
+if out_fold:
+    output_folders[ "4_slim_detect" ] = out_fold
+else:
+    # 3 parameter could be set for this rule:
+    # - iumethod
+    # - iucut
+    # - minregion
+    # NB: Other parameters could not be set using multiple values    
+    for out_fold_name in [ "4_slim_detect", "5_interactions", "6_summary", "7_renamed_sequences", "8_gprofiler" ]:
+        if ( isinstance( config[ "iucut" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "iucut_{iucut}" )
+        if ( isinstance( config[ "minregion" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "minregion_{minregion}" )
+        if ( isinstance( config[ "iumethod" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "iumethod_{iumethod}" )
+        if ( isinstance( config[ "conservation_analysis" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "conservation_{conservation_analysis}" )
+            
+output_folders[ "splitted_slim_detect" ] = os.path.join( output_folders[ "4_slim_detect" ], "{file_suffix}" )
+
+output_files[ "splitted_query_slim_slimprob_res" ] = os.path.join( output_folders[ "splitted_slim_detect" ], "query_{file_suffix}_slim_slimprob.tsv" )
+output_files[ "splitted_query_slim_slimprob_list" ] = os.path.join( output_folders[ "splitted_slim_detect" ], "query_{file_suffix}_slim_slimprob.occ.tsv" )
+output_files[ "splitted_query_slim_slimprob_log_file" ] = os.path.join( output_folders[ "splitted_slim_detect" ], "query_{file_suffix}_slimprob.log" )
+output_folders[ "splitted_query_slim_slimprob_out_dir" ] = os.path.join( output_folders[ "splitted_slim_detect" ], "SLiMProb_{file_suffix}" )
+output_folders[ "splitted_iupred_score_folder" ] = os.path.join( output_folders[ "splitted_slim_detect" ], "iuscore_{file_suffix}" )
+
+# Update placeholders
+for step in PLACEHOLDER_STEPS:
+    placeholder_files[ step + "_detect_slim_query" ] += "_{file_suffix}"
+    for pl_file in [ "detect_slim_query", "aggregate_detect_slim_query_output", "match_query_sqce_names", 
+                     "compute_query_disorder_propensity", "parse_slim_query", "interaction_inference", 
+                     "filter_dmi_on_domain_score", "extract_binary_interactions", 
+                     "generate_json_interaction_inference", 
+                     "generate_json_query_features", "simplify_sequence_names", "target_enrichment_gprofiler" ]:
+        if ( isinstance( config[ "iucut" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_iucut_{iucut}"
+        if ( isinstance( config[ "minregion" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_minregion_{minregion}"
+        if ( isinstance( config[ "iumethod" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_iumethod_{iumethod}"
+        if ( isinstance( config[ "conservation_analysis" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_conservation_{conservation_analysis}"
+  
+  
+# Rule aggregate_detect_slim_query_output
+# ---------------------------------------
+output_files[ "query_slim_slimprob_res" ] = os.path.join( output_folders[ "4_slim_detect" ], "query_slim_slimprob.tsv" )
+output_files[ "query_slim_slimprob_list" ] = os.path.join( output_folders[ "4_slim_detect" ], "query_slim_slimprob.occ.tsv" )
+output_folders[ "query_slim_slimprob_out_dir" ] = os.path.join( output_folders[ "4_slim_detect" ], "SLiMProb" )
+output_folders[ "iupred_score_folder" ] = os.path.join( output_folders[ "4_slim_detect" ], "iuscore" )
+
+output_files[ "aggregate_slimprob_res_log" ] = os.path.join( output_folders[ "4_slim_detect" ], "aggregate_slimprob_res.log" )
+output_files[ "aggregate_slimprob_list_log" ] = os.path.join( output_folders[ "4_slim_detect" ], "aggregate_slimprob_list.log" )
+output_files[ "aggregate_slimprob_iuscores_log" ] = os.path.join( output_folders[ "4_slim_detect" ], "aggregate_slimprob_iuscores.log" )
+           
+
+# Rule match_query_sqce_names
+# ---------------------------
+output_folders[ "4_match_query_sqce_names" ] = output_folders[ "4_slim_detect" ]
+# NB: No parameter could be provided for this rule
+output_files[ "query_seqnames_match_file" ] = os.path.join( output_folders[ "4_slim_detect" ], "query_seqnames_match.tsv" )
+
+# Rule parse_slim_query
+# ---------------------
+output_folders[ "4_parse_slim_query" ] = output_folders[ "4_slim_detect" ]
+# NB: No parameter could be provided for this rule
+output_files[ "query_slim_slimprob_parsed_file" ] = os.path.join( output_folders[ "4_slim_detect" ], "parsed_query_slim_slimprob.tsv" )
+
+# Rule compute_query_disorder_propensity
+# --------------------------------------
+output_folders[ "4_query_disorder_propensity" ] = output_folders[ "4_slim_detect" ]
+# NB: No parameter could be provided for this rule
+output_files[ "query_disorder_propensity_file" ] = os.path.join( output_folders[ "4_slim_detect" ], "disorder_propensities.tsv" )
+        
+        
+# Rule interaction_inference
+# --------------------------
+out_fold = config.get( "output_folder_interaction_inference" )
+if out_fold:
+    output_folders[ "5_interactions" ] = out_fold
+# NB: No parameter could be provided for this rule
+output_files[ "dmi_interaction_file" ] = os.path.join( output_folders[ "5_interactions" ], "inferred_dmi_interactions.tsv" )
+output_files[ "ddi_interaction_file" ] = os.path.join( output_folders[ "5_interactions" ], "inferred_ddi_interactions.tsv" )
+
+
+# Rule filter_dmi_on_domain_score
+# -------------------------------
+out_fold = config.get( "output_folder_filtered_interactions" )
+if out_fold:
+    output_folders[ "5_filtered_interactions" ] = out_fold
+else:
+    output_folders[ "5_filtered_interactions" ] = output_folders[ "5_interactions" ]
+    # 5 parameter could be set for this rule:
+    # - domain_score_filter
+    # - domain_score_threshold
+    # - domain_score_position
+    # - domain_score_overlap_dscore_to_dmi
+    # - domain_score_overlap_dmi_to_dscore
+    for out_fold_name in [ "5_filtered_interactions", "6_summary", "7_renamed_sequences", "8_gprofiler" ]:
+        if ( isinstance( config[ "domain_score_filter" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "ds_{domain_score_filter}" )
+        if ( isinstance( config[ "domain_score_threshold" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "ds_cutoff_{domain_score_threshold}" )
+        if ( isinstance( config[ "domain_score_position" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "ds_pos_{domain_score_position}" )
+        if ( isinstance( config[ "domain_score_overlap_dscore_to_dmi" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "dsoverlap_dscore_to_dmi_{domain_score_overlap_dscore_to_dmi}" )
+        if ( isinstance( config[ "domain_score_overlap_dmi_to_dscore" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "dsoverlap_dmi_to_dscore_{domain_score_overlap_dmi_to_dscore}" )
+            
+            
+output_files[ "filtered_domain_score_file" ] = os.path.join( output_folders[ "5_filtered_interactions" ], "filtered_domain_score.tsv" )
+output_files[ "filtered_dmi_on_ds_interaction_file" ] = os.path.join( output_folders[ "5_filtered_interactions" ], "filtered_dmi_interactions.tsv" )
+
+# Update placeholders
+for step in PLACEHOLDER_STEPS:
+    for pl_file in [ "filter_dmi_on_domain_score", "extract_binary_interactions", 
+                     "generate_json_interaction_inference", 
+                     "generate_json_query_features", "simplify_sequence_names", "target_enrichment_gprofiler" ]:
+        if ( isinstance( config[ "domain_score_filter" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_ds_{domain_score_filter}"
+        if ( isinstance( config[ "domain_score_threshold" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_ds_cutoff_{domain_score_threshold}"
+        if ( isinstance( config[ "domain_score_position" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_ds_pos_{domain_score_position}"
+        if ( isinstance( config[ "domain_score_overlap_dscore_to_dmi" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "dsoverlap_dscore_to_dmi_{domain_score_overlap_dscore_to_dmi}"
+        if ( isinstance( config[ "domain_score_overlap_dmi_to_dscore" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "dsoverlap_dmi_to_dscore_{domain_score_overlap_dmi_to_dscore}"
+
+# Rule extract_binary_interactions
+# --------------------------------
+output_folders[ "5_binary_interactions" ] = output_folders[ "5_filtered_interactions" ]
+# NB: No parameters could be provided for this rule
+output_files[ "inferred_all_interactions_file" ] = os.path.join( output_folders[ "5_binary_interactions" ], "inferred_all_interactions.tsv" )
+output_files[ "binary_interactions_file" ] = os.path.join( output_folders[ "5_binary_interactions" ], "inferred_binary_interactions.ncol" )
+
+# Rule generate_json_interaction_inference
+# ----------------------------------------
+output_folders[ "5_interactions_json" ] = output_folders[ "5_filtered_interactions" ]
+# NB: No parameter could be provided for this rule
+output_files[ "json_interaction_file" ] = os.path.join( output_folders[ "5_interactions_json" ], "all_interactions.json" )
+
+# Rule generate_json_query_features
+# ---------------------------------
+out_fold = config.get( "output_folder_summary" )
+if out_fold:
+    output_folders[ "6_summary" ] = out_fold
+output_folders[ "6_json_query_prot_features" ] = output_folders[ "6_summary" ]
+# NB: No parameter could be provided for this rule
+output_files[ "json_query_features_file" ] = os.path.join( output_folders[ "6_json_query_prot_features" ], "query_proteins_features.json" )
+
+# Rule simplify_sequence_names
+# ----------------------------
+out_fold = config.get( "output_folder_renamed_sequences" )
+if out_fold:
+    output_folders[ "7_renamed_sequences" ] = out_fold
+# NB: No parameter could be provided for this rule
+output_files[ "sequence_names_match_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "sequence_names.tsv" )
+output_files[ "renamed_seq_query_domain_parsed_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "query_domains.tsv" )
+output_files[ "renamed_seq_query_slim_slimprob_parsed_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "query_slims.tsv" )
+output_files[ "renamed_seq_query_disorder_propensity_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "query_disorder_prop.tsv" )
+output_files[ "renamed_seq_ddi_interaction_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "dd_interactions.tsv" )
+output_files[ "renamed_seq_dmi_interaction_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "dm_interactions.tsv" )
+output_files[ "renamed_seq_inferred_all_interactions_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "all_interactions.tsv" )
+output_files[ "renamed_seq_binary_interactions_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "binary_interactions.ncol" )
+output_files[ "renamed_json_interaction_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "all_interactions.json" )
+output_files[ "renamed_seq_json_query_features_file" ] = os.path.join( output_folders[ "7_renamed_sequences" ], "query_features.json" )
+
+# Rule target_enrichment_gprofiler
+# --------------------------------
+out_fold = config.get( "output_folder_gprofiler" )
+if out_fold:
+    output_folders[ "8_gprofiler" ] = out_fold
+    # 2 parameters with multiple values could be set for this rule:
+    # - gprofiler_correction_method
+    # - gprofiler_signif_threshold
+    for out_fold_name in [ "8_gprofiler" ]:
+        if ( isinstance( config[ "gprofiler_correction_method" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "corr_meth_{gprofiler_correction_method}" )
+        if ( isinstance( config[ "gprofiler_signif_threshold" ], list ) ):
+            output_folders[ out_fold_name ] = os.path.join( output_folders.get( out_fold_name ), "signif_fdr_{gprofiler_signif_threshold}" )
+            
+            
+output_files[ "unique_target_interactors_file" ] = os.path.join( output_folders[ "8_gprofiler" ], "unique_target_interactors.txt" )
+output_files[ "gprofiler_enrichment_html_file" ] = os.path.join( output_folders[ "8_gprofiler" ], "index.html" )
+output_files[ "gprofiler_enrichment_result_file" ] = os.path.join( output_folders[ "8_gprofiler" ], "gprofiler_result.tsv" )
+
+# Update placeholders
+for step in PLACEHOLDER_STEPS:
+    for pl_file in [ "target_enrichment_gprofiler" ]:
+        if ( isinstance( config[ "gprofiler_correction_method" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_corr_meth_{gprofiler_correction_method}"
+        if ( isinstance( config[ "domain_score_threshold" ], list ) ):
+            placeholder_files[ step + "_" + pl_file ] += "_signif_fdr_{gprofiler_signif_threshold}"
+
+
+
+# ===========================================
+# Log the options of the config file
+# and parameters automatically set
+# ===========================================
+
+basedir = os.path.dirname( output_files[ "log_parameters_file" ] )
+if not os.path.isdir( basedir ):
+    os.makedirs( basedir )
+    
+with open( output_files[ "log_parameters_file" ], 'w' ) as parameters_file:
+    parameters_file.write( "Parameter" + "\t" + "Value" + "\n" )
+    for ( param, value ) in config.items():
+        if ( param != "job_status_folder" ):
+            parameters_file.write( param + "\t" + str( value ) + "\n" )
+    
+
+
+# ===========================================
+# Functions to get the appropriate
+# wildcards values
+# ===========================================
+
+# The following functions return either the appropriate value of 
+# a parameter when a wildcard is used for it (i.e. when several 
+# values are provided in the config file) or its unique value 
+# provided in the config file.
+
+def get_pval_threshold_elm_parser( wildcards ):
+    
+    if ( ( isinstance( config[ "pval_threshold_elm_parser" ], list ) )
+         and ( len( config[ "pval_threshold_elm_parser" ] ) > 1 ) ):
+        return wildcards.pval_threshold_elm_parser
+    else: 
+        return config[ "pval_threshold_elm_parser" ]
+    
+    
+def get_pval_threshold_elm_filter( wildcards ):
+    
+    if ( ( isinstance( config[ "pval_threshold_elm_filter" ], list ) )
+         and ( len( config[ "pval_threshold_elm_filter" ] ) > 1 ) ):
+        return wildcards.pval_threshold_elm_filter
+    else: 
+        return config[ "pval_threshold_elm_filter" ]
+
+
+def get_score_threshold_interpro_query( wildcards ):
+    
+    if ( ( isinstance( config[ "score_threshold_interpro_query" ], list ) )
+         and ( len( config[ "score_threshold_interpro_query" ] ) > 1 ) ):
+        return wildcards.score_threshold_interpro_query
+    else: 
+        return config[ "score_threshold_interpro_query" ]
+
+
+def get_conservation_analysis( wildcards ):
+    
+    if ( ( isinstance( config[ "conservation_analysis" ], list ) ) 
+         and ( len( config[ "conservation_analysis" ] ) > 1 ) ):
+        return wildcards.conservation_analysis
+    else: 
+        return config[ "conservation_analysis" ]
+
+
+def get_minregion( wildcards ):
+    
+    if ( ( isinstance( config[ "minregion" ], list ) ) 
+         and ( len( config[ "minregion" ] ) > 1 ) ):
+        return wildcards.minregion
+    else: 
+        return config[ "minregion" ]
+
+
+def get_iumethod( wildcards ):
+    
+    if ( ( isinstance( config[ "iumethod" ], list ) ) 
+         and ( len( config[ "iumethod" ] ) > 1 ) ):
+        return wildcards.iumethod
+    else: 
+        return config[ "iumethod" ]
+
+
+def get_iucut( wildcards ):
+    
+    if ( ( isinstance( config[ "iucut" ], list ) ) 
+         and ( len( config[ "iucut" ] ) > 1 ) ):
+        return wildcards.iucut
+    else: 
+        return config[ "iucut" ]
+
+
+def get_domain_score_filter( wildcards ):
+    
+    if ( ( isinstance( config[ "domain_score_filter" ], list ) ) 
+         and ( len( config[ "domain_score_filter" ] ) > 1 ) ):
+        return wildcards.domain_score_filter
+    else: 
+        return config[ "domain_score_filter" ]
+
+
+def get_domain_score_threshold( wildcards ):
+    
+    if ( ( isinstance( config[ "domain_score_threshold" ], list ) ) 
+         and ( len( config[ "domain_score_threshold" ] ) > 1 ) ):
+        return wildcards.domain_score_threshold
+    else: 
+        return config[ "domain_score_threshold" ]
+
+
+def get_domain_score_position( wildcards ):
+    
+    if ( ( isinstance( config[ "domain_score_position" ], list ) ) 
+         and ( len( config[ "domain_score_position" ] ) > 1 ) ):
+        return wildcards.domain_score_position
+    else: 
+        return config[ "domain_score_position" ]
+
+
+def get_domain_score_overlap_dscore_to_dmi( wildcards ):
+    
+    if ( ( isinstance( config[ "domain_score_overlap_dscore_to_dmi" ], list ) ) 
+         and ( len( config[ "domain_score_overlap_dscore_to_dmi" ] ) > 1 ) ):
+        return wildcards.domain_score_overlap_dscore_to_dmi
+    else: 
+        return config[ "domain_score_overlap_dscore_to_dmi" ]
+
+
+def get_domain_score_overlap_dmi_to_dscore( wildcards ):
+    
+    if ( ( isinstance( config[ "domain_score_overlap_dmi_to_dscore" ], list ) ) 
+         and ( len( config[ "domain_score_overlap_dmi_to_dscore" ] ) > 1 ) ):
+        return wildcards.domain_score_overlap_dmi_to_dscore
+    else: 
+        return config[ "domain_score_overlap_dmi_to_dscore" ]
+
+
+def get_gprofiler_correction_method( wildcards ):
+    
+    if ( ( isinstance( config[ "gprofiler_correction_method" ], list ) ) 
+         and ( len( config[ "gprofiler_correction_method" ] ) > 1 ) ):
+        return wildcards.gprofiler_correction_method
+    else: 
+        return config[ "gprofiler_correction_method" ]
+
+
+def get_gprofiler_signif_threshold( wildcards ):
+    
+    if ( ( isinstance( config[ "gprofiler_signif_threshold" ], list ) ) 
+         and ( len( config[ "gprofiler_signif_threshold" ] ) > 1 ) ):
+        return wildcards.gprofiler_signif_threshold
+    else: 
+        return config[ "gprofiler_signif_threshold" ]
+    
+
+
+
+# ===========================================
+# Snakemake rules
+# ===========================================
+
+# Find which rule is expected to be the last depending if the update
+# of sequence names is expected 
+if ( config[ "simplify_seq_names" ] ):
+    output_files[ "last_rule_output" ] = output_files[ "sequence_names_match_file" ]
+else:
+    output_files[ "last_rule_output" ] = output_files[ "json_query_features_file" ]
+
+# Snakemake rules
+rule end:
+    input:
+        json_interaction_file = expand( output_files[ "json_interaction_file" ],
+                                        query_names = config[ "query_names" ],
+                                        pval_threshold_elm_parser = config[ "pval_threshold_elm_parser" ],
+                                        score_threshold_interpro_query = config[ "score_threshold_interpro_query" ],
+                                        iumethod = config[ "iumethod" ],
+                                        iucut = config[ "iucut" ],
+                                        minregion = config[ "minregion" ],
+                                        conservation_analysis = config[ "conservation_analysis" ],
+                                        domain_score_filter = config[ "domain_score_filter" ],
+                                        domain_score_threshold = config[ "domain_score_threshold" ],
+                                        domain_score_position = config[ "domain_score_position" ],
+                                        domain_score_overlap_dscore_to_dmi = config[ "domain_score_overlap_dscore_to_dmi" ],
+                                        domain_score_overlap_dmi_to_dscore = config[ "domain_score_overlap_dmi_to_dscore" ] ),
+        gprofiler_enrichment_result_file = expand( output_files[ "gprofiler_enrichment_result_file" ],
+                                        query_names = config[ "query_names" ],
+                                        pval_threshold_elm_parser = config[ "pval_threshold_elm_parser" ],
+                                        score_threshold_interpro_query = config[ "score_threshold_interpro_query" ],
+                                        iumethod = config[ "iumethod" ],
+                                        iucut = config[ "iucut" ],
+                                        minregion = config[ "minregion" ],
+                                        conservation_analysis = config[ "conservation_analysis" ],
+                                        domain_score_filter = config[ "domain_score_filter" ],
+                                        domain_score_threshold = config[ "domain_score_threshold" ],
+                                        domain_score_position = config[ "domain_score_position" ],
+                                        domain_score_overlap_dscore_to_dmi = config[ "domain_score_overlap_dscore_to_dmi" ],
+                                        domain_score_overlap_dmi_to_dscore = config[ "domain_score_overlap_dmi_to_dscore" ] ),
+        last_rule_output = expand( output_files[ "last_rule_output" ],
+                                        query_names = config[ "query_names" ],
+                                        pval_threshold_elm_parser = config[ "pval_threshold_elm_parser" ],
+                                        score_threshold_interpro_query = config[ "score_threshold_interpro_query" ],
+                                        iumethod = config[ "iumethod" ],
+                                        iucut = config[ "iucut" ],
+                                        minregion = config[ "minregion" ],
+                                        conservation_analysis = config[ "conservation_analysis" ],
+                                        domain_score_filter = config[ "domain_score_filter" ],
+                                        domain_score_threshold = config[ "domain_score_threshold" ],
+                                        domain_score_position = config[ "domain_score_position" ],
+                                        domain_score_overlap_dscore_to_dmi = config[ "domain_score_overlap_dscore_to_dmi" ],
+                                        domain_score_overlap_dmi_to_dscore = config[ "domain_score_overlap_dmi_to_dscore" ] ),
+    params:
+        end_workflow = placeholder_files[ "END_WORKFLOW" ]
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {params.end_workflow}
+        """
+
+
+# Parse a flat file from 3did to gather domain-domain
+# interaction templates.
+rule parse_3did:
+    input:
+        ddi_template_file = config[ "3did_flat_file" ]
+    output:
+        ddi_template_parsed_file = output_files[ "ddi_template_parsed_file" ],
+        end_parse_3did = placeholder_files[ "end_parse_3did" ]
+    log:
+        start_parse_3did = placeholder_files[ "start_parse_3did" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_parse_3did}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/parser3did.py \
+        --input {input.ddi_template_file} \
+        --output {output.ddi_template_parsed_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_parse_3did}
+        """
+
+
+# Convert the Pfam accessions in the file parsed from 3did 
+# into InterPro accessions.
+rule ddi_template_pfam_to_interpro:
+    input:
+        ddi_template_parsed_file = output_files[ "ddi_template_parsed_file" ],
+        pfam_interpro_mapping_file = config[ "pfam_interpro_mapping_file" ]
+    output:
+        ddi_template_interpro_file = output_files[ "ddi_template_interpro_file" ],
+        end_ddi_template_pfam_to_interpro = placeholder_files[ "end_ddi_template_pfam_to_interpro" ]
+    log:
+        start_ddi_template_pfam_to_interpro = placeholder_files[ "start_ddi_template_pfam_to_interpro" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_ddi_template_pfam_to_interpro}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/ddi_pfam_to_interpro.py \
+          --ddiTemplatePfam {input.ddi_template_parsed_file} \
+          --crossreferences {input.pfam_interpro_mapping_file} \
+          --ddiTemplateInterPro {output.ddi_template_interpro_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_ddi_template_pfam_to_interpro}
+        """
+
+
+# Parse ELM motif class and instances files to select those linear
+# motifs that have been observed in at least one human protein.
+# ELM classes are also filtered based on their probability of occurrence
+# meaning that "promiscuous" motifs (P>=0.01) are discarded.
+rule parse_elm:
+    input:
+        elm_classes_file = config[ "elm_classes_file" ],
+        elm_instances_file = config[ "elm_instances_file" ]
+    output:
+        elm_motifs_parsed_file = output_files[ "elm_motifs_parsed_file" ],
+        elm_summary_parsed_file = output_files[ "elm_summary_parsed_file" ],
+        end_parse_elm = placeholder_files[ "end_parse_elm" ]
+    log:
+        start_parse_elm = placeholder_files[ "start_parse_elm" ]
+    params:
+        pval_threshold_elm_parser = get_pval_threshold_elm_parser
+    singularity : "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_parse_elm}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/parserELM.py \
+	    --classes {input.elm_classes_file} \
+	    --instances {input.elm_instances_file} \
+	    --results {output.elm_motifs_parsed_file} \
+	    --motifs {output.elm_summary_parsed_file} \
+	    --pvalThreshold {params.pval_threshold_elm_parser}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_parse_elm}
+	    """
+
+
+# Filter ELM motif classes to select those with a probability below 
+# a certain threshold. This rule expect probabilities to have been
+# computed for all SLiMs of interest, for instance using the mimicINT
+# randomization workflow.
+# NB: This rule is optional and only executed 
+#     if an input file of SLiM p-values is provided by the user
+#     (i.e. if "slim_pvalues_v2_file" is not an empty string).
+rule filter_elm:
+    input:
+        slim_pvalues_v2_file = config[ "slim_pvalues_v2_file" ],
+        elm_motifs_parsed_file = output_files[ "elm_motifs_parsed_file" ]
+    output:
+        elm_motifs_selected = output_files[ "elm_motifs_selected_file" ],
+        elm_motifs_filtered = output_files[ "elm_motifs_filtered_file" ],
+        end_filter_elm = placeholder_files[ "end_filter_elm" ]
+    log:
+        start_filter_elm = placeholder_files[ "start_filter_elm" ]
+    params:
+        pval_threshold_elm_filter = get_pval_threshold_elm_filter
+    singularity : "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_filter_elm}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/filter_parsed_elm_on_slim_pval_v2.py \
+          --slimPval {input.slim_pvalues_v2_file} \
+          --parsedELM {input.elm_motifs_parsed_file} \
+          --selectedELM {output.elm_motifs_selected} \
+          --filteredELM {output.elm_motifs_filtered} \
+          --cutoff {params.pval_threshold_elm_filter}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_filter_elm}
+        """
+
+
+# Convert the Pfam accessions in the ELM - domain interaction
+# file into InterPro accessions.
+rule elm_domain_interactions_to_interpro:
+    input:
+        elm_interaction_domains_file = config[ "elm_interaction_domains_file" ],
+        pfam_interpro_mapping_file = config[ "pfam_interpro_mapping_file" ]
+    output:
+        elm_interaction_domains_interpro_file = output_files[ "elm_interaction_domains_interpro_file" ],
+        end_elm_domain_interactions_to_interpro = placeholder_files[ "end_elm_domain_interactions_to_interpro" ]
+    log:
+        start_elm_domain_interactions_to_interpro = placeholder_files[ "start_elm_domain_interactions_to_interpro" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_elm_domain_interactions_to_interpro}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/elm_domain_interactions_to_interpro.py \
+        --elmInteractionDomainsPfam {input.elm_interaction_domains_file} \
+        --crossReferences {input.pfam_interpro_mapping_file} \
+        --elmInteractionDomainsInterPro {output.elm_interaction_domains_interpro_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_elm_domain_interactions_to_interpro}
+        """
+	        
+
+# Use InterProScan to detect the domains in the query sequences.
+rule detect_domain_query:
+    input:
+        query_fasta_file = config[ "query_fasta_file" ]
+    output:
+        query_domain_file = output_files[ "query_domain_file" ],
+        end_detect_domain_query = placeholder_files[ "end_detect_domain_query" ]
+    log:
+        start_detect_domain_query = placeholder_files[ "start_detect_domain_query" ]
+    singularity : "common/Docker/domain_detect/tagc-mimicint-domain-detect.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_detect_domain_query}
+        export PATH=$PATH:/interproscan/interproscan-5.52-86.0
+        interproscan.sh -appl Pfam -dp -f tsv -t p \
+	     -i {input.query_fasta_file} \
+	     -o {output.query_domain_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_detect_domain_query}
+        """
+	      
+       
+# Parse the InterProScan output run on the query sequences 
+# to get useful information.
+rule parse_domain_query:
+    input:
+        query_domain_file = output_files[ "query_domain_file" ]
+    output:
+        query_domain_parsed_file = output_files[ "query_domain_parsed_file" ],
+        end_parse_domain_query = placeholder_files[ "end_parse_domain_query" ]
+    log:
+        start_parse_domain_query = placeholder_files[ "start_parse_domain_query" ]
+    params:
+        score_threshold_interpro_query = get_score_threshold_interpro_query
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_parse_domain_query}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/parser_res_interproscan.py \
+	    --ipsRes {input.query_domain_file} \
+	    --output {output.query_domain_parsed_file} \
+        --scoreThreshold {params.score_threshold_interpro_query}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_parse_domain_query}
+        """
+
+
+# Split the large query fasta file into several fasta files
+checkpoint split_query_dataset:
+    input:
+        query_fasta_file = config[ "query_fasta_file" ]
+    output:
+        splitted_query = directory( output_folders[ "splitted_query" ] ),
+        end_split_query_dataset = placeholder_files[ "end_split_query_dataset" ]
+    params:
+        max_seq_per_fasta = config[ 'max_seq_per_fasta' ]
+    log:
+        start_split_query_dataset = placeholder_files[ "start_split_query_dataset" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_split_query_dataset}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/split_fasta_file.py \
+          --input {input.query_fasta_file} \
+          --outputDir {output.splitted_query} \
+          --maxSeqPerFile {params.max_seq_per_fasta}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_split_query_dataset}
+        """
+
+
+# Use SLiMProb (SLiM suite) to identify the SLiM in the query sequences,
+# and optionally perform a conservation analysis.        
+def get_detect_slim_query_elm_motifs_input( wildcards ):
+    
+    if config[ "slim_pvalues_v2_file"] and ( config[ "slim_pvalues_v2_file"] != ''):
+        elm_motifs_input_file = output_files[ "elm_motifs_filtered_file" ]
+    else:
+        elm_motifs_input_file = output_files[ "elm_motifs_parsed_file" ]
+        
+    return elm_motifs_input_file
+
+
+rule detect_slim_query:
+    input:
+        elm_motifs_parsed_file = get_detect_slim_query_elm_motifs_input,
+        splitted_query_fasta_file = output_files[ "splitted_query_fasta_file" ]
+    output:
+        splitted_query_slim_slimprob_res = output_files[ "splitted_query_slim_slimprob_res" ],
+        splitted_query_slim_slimprob_list = output_files[ "splitted_query_slim_slimprob_list" ],
+        splitted_query_slim_slimprob_out_dir = directory( output_folders[ "splitted_query_slim_slimprob_out_dir" ] ),
+        splitted_iupred_score_folder = directory( output_folders[ "splitted_iupred_score_folder" ] ),
+        end_detect_slim_query = placeholder_files[ "end_detect_slim_query" ]
+    log:
+        splitted_query_slim_slimprob_log_file = output_files[ "splitted_query_slim_slimprob_log_file" ],
+        start_detect_slim_query = placeholder_files[ "start_detect_slim_query" ]
+    params:
+        conservation_analysis = get_conservation_analysis,
+        maxsize = config[ "maxsize" ],
+        maxseq = config[ "maxseq" ],
+        minregion = get_minregion,
+        iumethod = get_iumethod,
+        iucut = get_iucut
+    singularity: "common/Docker/slim_detect/tagc-mimicint-slim-detect.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_detect_slim_query}
+        # Provide different config options depending if the conservation 
+        # analysis option has been selected by the user
+        if [ {params.conservation_analysis} == True ]
+        then 
+            bash mimicINT_InterPro/script/run_slimprob.sh \
+                            --consMode True \
+                            --motifs {input.elm_motifs_parsed_file} \
+                            --seqin {input.splitted_query_fasta_file} \
+                            --orthodb {config[orthodb_fasta_file]} \
+                            --resdir {output.splitted_query_slim_slimprob_out_dir} \
+                            --resfile {output.splitted_query_slim_slimprob_res} \
+                            --log {log.splitted_query_slim_slimprob_log_file} \
+                            --iuscoredir {output.splitted_iupred_score_folder} \
+                            --maxsize {params.maxsize} \
+                            --maxseq {params.maxseq} \
+                            --minregion {params.minregion} \
+                            --iumethod {params.iumethod} \
+                            --iucut {params.iucut}
+        else
+            bash mimicINT_InterPro/script/run_slimprob.sh \
+                            --motifs {input.elm_motifs_parsed_file} \
+                            --seqin {input.splitted_query_fasta_file} \
+                            --resdir {output.splitted_query_slim_slimprob_out_dir} \
+                            --resfile {output.splitted_query_slim_slimprob_res} \
+                            --log {log.splitted_query_slim_slimprob_log_file} \
+                            --iuscoredir {output.splitted_iupred_score_folder} \
+                            --maxsize {params.maxsize} \
+                            --maxseq {params.maxseq} \
+                            --minregion {params.minregion} \
+                            --iumethod {params.iumethod} \
+                            --iucut {params.iucut}
+        fi
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_detect_slim_query}
+        """
+        
+
+# Aggregate the outputs of the detect_slim_query rule into one single file
+def aggregate_splitted_query_slim_slimprob_res( wildcards ):
+    
+    checkpoint_output_dir = checkpoints.split_query_dataset.get(**wildcards).output[0]
+    
+    # Get the list of wildcards that need to be used
+    expand_wildcards = []
+    for ( wildcard_name, wildcard_value ) in wildcards.items():
+        expand_wildcards.append( wildcard_name + '="' + str( wildcard_value ) + '"' )
+    expand_wildcards = ', '.join( expand_wildcards )
+        
+    # Compute the values for the file suffix wildcard
+    # First, get the path to the fasta files for the query 
+    # (if several queries have been provided)
+    if  ( expand_wildcards != '' ):
+        splitted_query_fasta_file_path_pattern = ( '"' + output_files[ "splitted_query_fasta_file" ] + 
+                                                   '".format(' + expand_wildcards + 
+                                                   ', file_suffix="{file_suffix}"' + ')' )
+    else:
+        splitted_query_fasta_file_path_pattern = ( '"' + output_files[ "splitted_query_fasta_file" ] + 
+                                                   '".format(file_suffix="{file_suffix}")' )
+    # Then, get the values for the file suffixes
+    expand_file_suffix = glob_wildcards( eval( splitted_query_fasta_file_path_pattern ) ).file_suffix   
+    
+    # Write the expand function to use
+    if ( expand_wildcards != '' ):
+        expand_str = ( 'expand("' +
+                       output_files[ "splitted_query_slim_slimprob_res" ] + '",' + 
+                       expand_wildcards + 
+                       ',file_suffix=' + str( expand_file_suffix ) + ')' )
+    else:
+        expand_str = ( 'expand("' +
+                       output_files[ "splitted_query_slim_slimprob_res" ] + '",' + 
+                       'file_suffix=' + str( expand_file_suffix ) + ')' )
+    
+    return eval( expand_str )
+
+
+def aggregate_splitted_query_slim_slimprob_list( wildcards ):
+    
+    checkpoint_output_dir = checkpoints.split_query_dataset.get(**wildcards).output[0]
+    
+    # Get the list of wildcards that need to be used
+    expand_wildcards = []
+    for ( wildcard_name, wildcard_value ) in wildcards.items():
+        expand_wildcards.append( wildcard_name + '="' + str( wildcard_value ) + '"' )
+    expand_wildcards = ', '.join( expand_wildcards )
+        
+    # Compute the values for the file suffix wildcard
+    # First, get the path to the fasta files for the query 
+    # (if several queries have been provided)
+    if  ( expand_wildcards != '' ):
+        splitted_query_fasta_file_path_pattern = ( '"' + output_files[ "splitted_query_fasta_file" ] + 
+                                                   '".format(' + expand_wildcards + 
+                                                   ', file_suffix="{file_suffix}"' + ')' )
+    else:
+        splitted_query_fasta_file_path_pattern = ( '"' + output_files[ "splitted_query_fasta_file" ] + 
+                                                   '".format(file_suffix="{file_suffix}")' )
+    # Then, get the values for the file suffixes
+    expand_file_suffix = glob_wildcards( eval( splitted_query_fasta_file_path_pattern ) ).file_suffix 
+    
+    # Write the expand function to use
+    if ( expand_wildcards != '' ):
+        expand_str = ( 'expand("' + 
+                       output_files[ "splitted_query_slim_slimprob_list" ] + '",' + 
+                       expand_wildcards + 
+                       ',file_suffix=' + str( expand_file_suffix ) + ')' )
+    else:
+        expand_str = ( 'expand("' + 
+                       output_files[ "splitted_query_slim_slimprob_list" ] + '",' + 
+                       'file_suffix=' + str( expand_file_suffix ) + ')' )
+    
+    return eval( expand_str )
+
+
+def aggregate_splitted_iupred_score_folder( wildcards ):
+    
+    checkpoint_output_dir = checkpoints.split_query_dataset.get(**wildcards).output[0]
+    
+    # Get the list of wildcards that need to be used
+    expand_wildcards = []
+    for ( wildcard_name, wildcard_value ) in wildcards.items():
+        expand_wildcards.append( wildcard_name + '="' + str( wildcard_value ) + '"' )
+    expand_wildcards = ', '.join( expand_wildcards )
+        
+    # Compute the values for the file suffix wildcard
+    # First, get the path to the fasta files for the query 
+    # (if several queries have been provided)
+    if  ( expand_wildcards != '' ):
+        splitted_query_fasta_file_path_pattern = ( '"' + output_files[ "splitted_query_fasta_file" ] + 
+                                                   '".format(' + expand_wildcards + 
+                                                   ', file_suffix="{file_suffix}"' + ')' )
+    else:
+        splitted_query_fasta_file_path_pattern = ( '"' + output_files[ "splitted_query_fasta_file" ] + 
+                                                   '".format(file_suffix="{file_suffix}")' )
+    # Then, get the values for the file suffixes
+    expand_file_suffix = glob_wildcards( eval( splitted_query_fasta_file_path_pattern ) ).file_suffix   
+    
+    # Write the expand function to use
+    if ( expand_wildcards != '' ):
+        expand_str = ( 'expand("' + 
+                       output_folders[ "splitted_iupred_score_folder" ] + '",' + 
+                       expand_wildcards + 
+                       ',file_suffix=' + str( expand_file_suffix ) + ')' )
+    else:
+        expand_str = ( 'expand("' + 
+                       output_folders[ "splitted_iupred_score_folder" ] + '",' + 
+                       'file_suffix=' + str( expand_file_suffix ) + ')' )
+    
+    return eval( expand_str )
+
+
+rule aggregate_detect_slim_query_output:
+    input:
+        splitted_query_slim_slimprob_res = aggregate_splitted_query_slim_slimprob_res,
+        splitted_query_slim_slimprob_list = aggregate_splitted_query_slim_slimprob_list,
+        splitted_iupred_score_folder = aggregate_splitted_iupred_score_folder
+    output:
+        query_slim_slimprob_res = output_files[ "query_slim_slimprob_res" ],
+        query_slim_slimprob_list = output_files[ "query_slim_slimprob_list" ],
+        iupred_score_folder = directory( output_folders[ "iupred_score_folder" ] ),
+        end_aggregate_detect_slim_query_output = placeholder_files[ "end_aggregate_detect_slim_query_output" ]
+    log:
+        aggregate_slimprob_res_log = output_files[ "aggregate_slimprob_res_log" ],
+        aggregate_slimprob_list_log = output_files[ "aggregate_slimprob_list_log" ],
+        aggregate_slimprob_iuscores_log = output_files[ "aggregate_slimprob_iuscores_log" ],
+        start_aggregate_detect_slim_query_output = placeholder_files[ "start_aggregate_detect_slim_query_output" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_aggregate_detect_slim_query_output}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        
+        # Replace spaces by comma in inputs
+        splitted_query_slim_slimprob_res="{input.splitted_query_slim_slimprob_res}"
+        splitted_query_slim_slimprob_res=${{splitted_query_slim_slimprob_res// /,}}
+        
+        splitted_query_slim_slimprob_list="{input.splitted_query_slim_slimprob_list}"
+        splitted_query_slim_slimprob_list=${{splitted_query_slim_slimprob_list// /,}}
+        
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/aggregate_slimprob_res.py \
+          --input $splitted_query_slim_slimprob_res \
+          --output {output.query_slim_slimprob_res} \
+          > {log.aggregate_slimprob_res_log}
+          
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/aggregate_slimprob_list.py \
+          --input $splitted_query_slim_slimprob_list \
+          --output {output.query_slim_slimprob_list} \
+          > {log.aggregate_slimprob_list_log}
+        
+        mkdir -p {output.iupred_score_folder}
+        for i in {input.splitted_iupred_score_folder}
+        do
+          mv $i/* {output.iupred_score_folder} && rm -R $i >> {log.aggregate_slimprob_iuscores_log}
+        done
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_aggregate_detect_slim_query_output}
+        """
+
+
+# Compute the correspondences between the sequence names used by SliMProb and
+# the name of the sequence from the query fasta headers 
+rule match_query_sqce_names:
+    input:
+        query_fasta_file = config[ "query_fasta_file" ],
+        query_slim_slimprob_list = output_files[ "query_slim_slimprob_list" ],
+        iupred_score_folder = directory( output_folders[ "iupred_score_folder" ] )        
+    output:
+        query_seqnames_match_file = output_files[ "query_seqnames_match_file" ],
+        end_match_query_sqce_names = placeholder_files[ "end_match_query_sqce_names" ]
+    log:
+        start_match_query_sqce_names = placeholder_files[ "start_match_query_sqce_names" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_match_query_sqce_names}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/match_query_sqce_names.py \
+          --fastaFile {input.query_fasta_file} \
+          --slimprobRes {input.query_slim_slimprob_list} \
+          --iuscoredir {input.iupred_score_folder} \
+          --seqNameFile {output.query_seqnames_match_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_match_query_sqce_names}
+        """
+
+
+# Parse the output of SLiM Prob in order to get useful information
+rule parse_slim_query:
+    input:
+        elm_classes_file = config[ "elm_classes_file" ],
+        query_slim_slimprob_list = output_files[ "query_slim_slimprob_list" ],
+        query_seqnames_match_file = output_files[ "query_seqnames_match_file" ]
+    output:
+        query_slim_slimprob_parsed_file = output_files[ "query_slim_slimprob_parsed_file" ],
+        end_parse_slim_query = placeholder_files[ "end_parse_slim_query" ]
+    log:
+        start_parse_slim_query = placeholder_files[ "start_parse_slim_query" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_parse_slim_query}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/parser_res_slimprob.py \
+        --slimprobRes {input.query_slim_slimprob_list} \
+        --elmClasses {input.elm_classes_file} \
+        --seqNamesFile {input.query_seqnames_match_file} \
+        --parsedFile {output.query_slim_slimprob_parsed_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_parse_slim_query}
+        """
+
+
+# Compute the disordered propensity for query sequences
+rule compute_query_disorder_propensity:
+    input:
+        iupred_score_folder = directory( output_folders[ "iupred_score_folder" ] ),
+        query_seqnames_match_file = output_files[ "query_seqnames_match_file" ]
+    output:
+        query_disorder_propensity_file = output_files[ "query_disorder_propensity_file" ],
+        end_compute_query_disorder_propensity = placeholder_files[ "end_compute_query_disorder_propensity" ]
+    log:
+        start_compute_query_disorder_propensity = placeholder_files[ "start_compute_query_disorder_propensity" ]
+    params:
+        iucut = get_iucut
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_compute_query_disorder_propensity}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/compute_query_disorder.py \
+        --iuscoredir {input.iupred_score_folder} \
+        --seqNames {input.query_seqnames_match_file} \
+        --output {output.query_disorder_propensity_file} \
+        --iucut {params.iucut}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_compute_query_disorder_propensity}
+        """
+
+
+# Infer the domain(target) - domain(query) and domain(target) - SLiM(query)
+# interactions by combining the identifications of the domains and SLiM in the
+# provided sequences and using H. sapiens known templates of interaction.
+rule interaction_inference:
+    input:
+        ddi_template_interpro_file = output_files[ "ddi_template_interpro_file" ],
+        target_interpro_annotations_file = config[ "target_interpro_annotations_file" ],
+        query_domain_parsed_file = output_files[ "query_domain_parsed_file" ],
+        query_slim_slimprob_parsed_file = output_files[ "query_slim_slimprob_parsed_file" ],
+        elm_interaction_domains_interpro_file = output_files[ "elm_interaction_domains_interpro_file" ]  
+    output:
+        dmi_interaction_file = output_files[ "dmi_interaction_file" ],
+        ddi_interaction_file = output_files[ "ddi_interaction_file" ],
+        end_interaction_inference = placeholder_files[ "end_interaction_inference" ]
+    log:
+        start_interaction_inference = placeholder_files[ "start_interaction_inference" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_interaction_inference}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/interaction_inference.py \
+         --queryDomains {input.query_domain_parsed_file} \
+         --targetDomains {input.target_interpro_annotations_file} \
+         --querySlim {input.query_slim_slimprob_parsed_file} \
+         --elmDomainInt {input.elm_interaction_domains_interpro_file} \
+         --domainDomainInt {input.ddi_template_interpro_file} \
+         --outputSlimDomainInt {output.dmi_interaction_file} \
+         --outputDomainDomainInt {output.ddi_interaction_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_interaction_inference}
+        """
+
+
+# Filter the DMIs based on domain score
+rule filter_dmi_on_domain_score:
+    input:
+        domain_score_file = config[ "domain_score_file" ],
+        dmi_interaction_file = output_files[ "dmi_interaction_file" ]
+    output:
+        filtered_domain_score_file = output_files[ "filtered_domain_score_file" ],
+        filtered_dmi_on_ds_interaction_file = output_files[ "filtered_dmi_on_ds_interaction_file" ],
+        end_filter_dmi_on_domain_score = placeholder_files[ "end_filter_dmi_on_domain_score" ]
+    log:
+        start_filter_dmi_on_domain_score = placeholder_files[ "start_filter_dmi_on_domain_score" ]
+    params:
+        domain_score_filter = get_domain_score_filter,
+        domain_score_threshold = get_domain_score_threshold,
+        domain_score_position = get_domain_score_position,
+        domain_score_overlap_dscore_to_dmi = get_domain_score_overlap_dscore_to_dmi,
+        domain_score_overlap_dmi_to_dscore = get_domain_score_overlap_dmi_to_dscore
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_filter_dmi_on_domain_score}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        
+        # Provide different config options depending if the position
+        # option has been selected by the user
+        if [ {params.domain_score_position} == True ]
+        then 
+            /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/filter_dmi_on_domain_score.py \
+              --dScore {input.domain_score_file} \
+              --dmi {input.dmi_interaction_file} \
+              --filteredDscore {output.filtered_domain_score_file} \
+              --filteredDmi {output.filtered_dmi_on_ds_interaction_file} \
+              --filter {params.domain_score_filter} \
+              --score {params.domain_score_threshold} \
+              --position \
+              --overlap {params.domain_score_overlap_dscore_to_dmi} \
+              --Overlap {params.domain_score_overlap_dmi_to_dscore} 
+        else
+            /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/filter_dmi_on_domain_score.py \
+              --dScore {input.domain_score_file} \
+              --dmi {input.dmi_interaction_file} \
+              --filteredDscore {output.filtered_domain_score_file} \
+              --filteredDmi {output.filtered_dmi_on_ds_interaction_file} \
+              --filter {params.domain_score_filter} \
+              --score {params.domain_score_threshold}
+        fi
+        
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_filter_dmi_on_domain_score}
+        """
+        
+
+# Extract the unique interactions from the DDI and DMI   
+def get_extract_binary_interactions_input( wildcards ):
+    
+    if config[ "domain_score_file"] and ( config[ "domain_score_file"] != ''):
+        dmi_interaction_input_file = output_files[ "filtered_dmi_on_ds_interaction_file" ]
+    else:
+        dmi_interaction_input_file = output_files[ "dmi_interaction_file" ]
+        
+    return dmi_interaction_input_file
+
+rule extract_binary_interactions:
+    input:
+        dmi_interaction_file = get_extract_binary_interactions_input,
+        ddi_interaction_file = output_files[ "ddi_interaction_file" ]
+    output:
+        inferred_all_interactions_file = output_files[ "inferred_all_interactions_file" ],
+        binary_interactions_file = output_files[ "binary_interactions_file" ],
+        end_extract_binary_interactions = placeholder_files[ "end_extract_binary_interactions" ]
+    log:
+        start_extract_binary_interactions = placeholder_files[ "start_extract_binary_interactions" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_extract_binary_interactions}
+        /bin/bash mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/extract_binary_interactions.sh \
+          --dmi {input.dmi_interaction_file} \
+          --ddi {input.ddi_interaction_file} \
+          --all {output.inferred_all_interactions_file} \
+          --binary {output.binary_interactions_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_extract_binary_interactions}
+        """
+         
+
+# Generate a json file that may be used by Cytoscape
+rule generate_json_interaction_inference:
+    input:
+        target_interpro_annotations_file = config[ "target_interpro_annotations_file" ],
+        inferred_all_interactions_file = output_files[ "inferred_all_interactions_file" ]
+    output:
+        json_interaction_file = output_files[ "json_interaction_file" ] ,
+        end_generate_json_interaction_inference = placeholder_files[ "end_generate_json_interaction_inference" ]
+    log:
+        start_generate_json_interaction_inference = placeholder_files[ "start_generate_json_interaction_inference" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_generate_json_interaction_inference}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/interaction_all_to_json.py \
+        --inferredInteractions {input.inferred_all_interactions_file} \
+        --targetDomain {input.target_interpro_annotations_file} \
+        --output {output.json_interaction_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_generate_json_interaction_inference}
+        """
+         
+
+# Generate a json file that may be used by Cytoscape
+rule generate_json_query_features:
+    input:
+        query_fasta_file = config[ "query_fasta_file" ],
+        query_domain_parsed_file = output_files[ "query_domain_parsed_file" ],
+        query_slim_slimprob_parsed_file = output_files[ "query_slim_slimprob_parsed_file" ],
+        query_disorder_propensity_file = output_files[ "query_disorder_propensity_file" ]
+    output:
+        json_query_features_file = output_files[ "json_query_features_file" ] ,
+        end_generate_json_query_features = placeholder_files[ "end_generate_json_query_features" ]
+    log:
+        start_generate_json_query_features = placeholder_files[ "start_generate_json_query_features" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_generate_json_query_features}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/parsing_scripts/query_proteins_features_to_json.py \
+        --queryFasta {input.query_fasta_file} \
+        --queryDomain {input.query_domain_parsed_file} \
+        --querySlimprob {input.query_slim_slimprob_parsed_file} \
+        --queryPropensities {input.query_disorder_propensity_file} \
+        --output {output.json_query_features_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_generate_json_query_features}
+        """
+         
+
+# Rename the sequences in all the output (optional rule)
+def get_simplify_sequence_names_input( wildcards ):
+    
+    if config[ "domain_score_file"] and ( config[ "domain_score_file"] != ''):
+        dmi_interaction_input_file = output_files[ "filtered_dmi_on_ds_interaction_file" ]
+    else:
+        dmi_interaction_input_file = output_files[ "dmi_interaction_file" ]
+        
+    return dmi_interaction_input_file
+
+rule simplify_sequence_names:
+    input:
+        query_fasta_file = config[ "query_fasta_file" ],
+        target_interpro_annotations_file = config[ "target_interpro_annotations_file" ],
+        query_domain_parsed_file = output_files[ "query_domain_parsed_file" ],
+        query_slim_slimprob_parsed_file = output_files[ "query_slim_slimprob_parsed_file" ],
+        query_seqnames_match_file = output_files[ "query_seqnames_match_file" ],
+        query_disorder_propensity_file = output_files[ "query_disorder_propensity_file" ],
+        ddi_interaction_file = output_files[ "ddi_interaction_file" ],
+        dmi_interaction_file = get_simplify_sequence_names_input,
+        inferred_all_interactions_file = output_files[ "inferred_all_interactions_file" ],
+        binary_interactions_file = output_files[ "binary_interactions_file" ],
+        json_query_features_file = output_files[ "json_query_features_file" ] 
+    output:
+        sequence_names_match_file = output_files[ "sequence_names_match_file" ],
+        renamed_seq_query_domain_parsed_file = output_files[ "renamed_seq_query_domain_parsed_file" ],
+        renamed_seq_query_slim_slimprob_parsed_file = output_files[ "renamed_seq_query_slim_slimprob_parsed_file" ],
+        renamed_seq_query_disorder_propensity_file = output_files[ "renamed_seq_query_disorder_propensity_file" ],
+        renamed_seq_ddi_interaction_file = output_files[ "renamed_seq_ddi_interaction_file" ],
+        renamed_seq_dmi_interaction_file = output_files[ "renamed_seq_dmi_interaction_file" ],
+        renamed_seq_inferred_all_interactions_file = output_files[ "renamed_seq_inferred_all_interactions_file" ],
+        renamed_seq_binary_interactions_file = output_files[ "renamed_seq_binary_interactions_file" ],
+        renamed_json_interaction_file = output_files[ "renamed_json_interaction_file" ],
+        renamed_seq_json_query_features_file = output_files[ "renamed_seq_json_query_features_file" ],
+        end_simplify_sequence_names = placeholder_files[ "end_simplify_sequence_names" ]
+    log:
+        start_simplify_sequence_names = placeholder_files[ "start_simplify_sequence_names" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_simplify_sequence_names}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/simplify_sqce_names.py \
+          --queryFasta {input.query_fasta_file} \
+          --queryMatch {input.query_seqnames_match_file} \
+          --targetDomain {input.target_interpro_annotations_file} \
+          --queryDomain {input.query_domain_parsed_file} \
+          --querySlimprob {input.query_slim_slimprob_parsed_file} \
+          --queryDisorder {input.query_disorder_propensity_file} \
+          --ddi {input.ddi_interaction_file} \
+          --dmi {input.dmi_interaction_file} \
+          --allInteractions {input.inferred_all_interactions_file} \
+          --binaryInteractions {input.binary_interactions_file} \
+          --queryFeatures {input.json_query_features_file} \
+          --seqNames {output.sequence_names_match_file} \
+          --queryDomainOut {output.renamed_seq_query_domain_parsed_file} \
+          --querySlimprobOut {output.renamed_seq_query_slim_slimprob_parsed_file} \
+          --queryDisorderOut {output.renamed_seq_query_disorder_propensity_file} \
+          --ddiOut {output.renamed_seq_ddi_interaction_file} \
+          --dmiOut {output.renamed_seq_dmi_interaction_file} \
+          --allInteractionsOut {output.renamed_seq_inferred_all_interactions_file} \
+          --binaryInteractionsOut {output.renamed_seq_binary_interactions_file} \
+          --allInteractionsJsonOut {output.renamed_json_interaction_file} \
+          --queryFeaturesOut {output.renamed_seq_json_query_features_file}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_simplify_sequence_names}
+        """
+         
+
+# Get the list of target proteins having at least one domain (InterPro entry)
+# and for which interactions can be theoretically computed (i.e. these InterPro 
+# have interactors in the DDI and/or DMI templates)
+rule get_target_prot_with_potential_interactions:
+    input:
+        target_interpro_annotations_file = config[ "target_interpro_annotations_file" ],
+        ddi_template_interpro_file = output_files[ "ddi_template_interpro_file" ],
+        elm_interaction_domains_interpro_file = output_files[ "elm_interaction_domains_interpro_file" ]
+    output:
+        target_with_domains_with_templates_of_inter = output_files[ "target_with_domains_with_templates_of_inter" ],
+        end_get_target_prot_with_potential_interactions = placeholder_files[ "end_get_target_prot_with_potential_interactions" ]
+    log:
+        start_get_target_prot_with_potential_interactions = placeholder_files[ "start_get_target_prot_with_potential_interactions" ]
+    singularity: "common/Docker/data_parse/tagc-mimicint-data-parse.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_get_target_prot_with_potential_interactions}
+        export LC_ALL=C.UTF-8
+        export LANG=C.UTF-8
+        export PYTHONPATH=mimicINT_InterPro/src
+        /usr/local/bin/python3 mimicINT_InterPro/src/fr/tagc/mimicint/get_target_prot_with_potential_interactions.py \
+          --targetDom {input.target_interpro_annotations_file} \
+          --ddi {input.ddi_template_interpro_file} \
+          --dmi {input.elm_interaction_domains_interpro_file} \
+          --output {output.target_with_domains_with_templates_of_inter}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_get_target_prot_with_potential_interactions}
+        """
+         
+
+# Perform an enrichment analysis on target interactors
+# - List: Target proteins interacting with at least one query
+# - Background: Target proteins having at least one domain (InterPro entry)
+#               and for which interactions can be theoretically computed
+#               (i.e. these InterPro have interactors in the DDI and/or DMI templates)
+# - Ontologies: Set by the user (GO, KEGG, REACTOME etc.)
+rule target_enrichment_gprofiler:
+    input:
+        inferred_all_interactions_file = output_files[ "inferred_all_interactions_file" ],
+        target_with_domains_with_templates_of_inter = output_files[ "target_with_domains_with_templates_of_inter" ]
+    output:
+        unique_target_interactors_file = output_files[ "unique_target_interactors_file" ],
+        gprofiler_enrichment_html_file = output_files[ "gprofiler_enrichment_html_file" ],
+        gprofiler_enrichment_result_file = output_files[ "gprofiler_enrichment_result_file" ],
+        end_target_enrichment_gprofiler = placeholder_files[ "end_target_enrichment_gprofiler" ]
+    log:
+        start_target_enrichment_gprofiler = placeholder_files[ "start_target_enrichment_gprofiler" ]
+    params:
+        run_id = config[ "run_id" ],
+        target_species_short = config[ "target_species_short" ],
+        gprofiler_url = config[ "gprofiler_url"],
+        gprofiler_sources = config[ "gprofiler_sources"],
+        gprofiler_correction_method = get_gprofiler_correction_method,
+        gprofiler_signif_threshold = get_gprofiler_signif_threshold
+    singularity: "common/Docker/R/tagc-mimicint-r.img"
+    shell:
+        """
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {log.start_target_enrichment_gprofiler}
+        # NB: The format of the target fasta headers is expected to follow UniProt 
+        #     nomenclatures in order for this rule to work properly
+        
+        # Parse the interactions file to get the list of unique target's interactors
+        awk '{{ print $2 }}' FS='\t' {input.inferred_all_interactions_file} \
+          | tail -n +2 \
+          | sort | uniq > {output.unique_target_interactors_file}
+        
+        # Run gProfiler
+        /usr/local/bin/Rscript mimicINT_InterPro/src/fr/tagc/mimicint/enrichment_gprofiler.R \
+          --run_id {params.run_id} \
+          --species {params.target_species_short} \
+          --interactor_list_path {output.unique_target_interactors_file} \
+          --background_list_path {input.target_with_domains_with_templates_of_inter} \
+          --output_html_file_path {output.gprofiler_enrichment_html_file} \
+          --output_result_file_path {output.gprofiler_enrichment_result_file} \
+          --gprofiler_url {params.gprofiler_url} \
+          --gprofiler_sources {params.gprofiler_sources} \
+          --gprofiler_correction_method {params.gprofiler_correction_method} \
+          --gprofiler_signif_threshold {params.gprofiler_signif_threshold}
+        echo $(date +"%Y-%m-%d %H:%M:%S") > {output.end_target_enrichment_gprofiler}
+        """
+        

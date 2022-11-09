@@ -1,0 +1,49 @@
+
+# Folder tree view
+# ================
+
+Descriptions of the file / directory and additional information 
+are provided between [brackets].
+The folder common contains various script and environment necessary 
+to the various mimicINT workflows.
+
+..
+│
+├── docs
+│   └── folder.txt [Tree view and description of the common folder content]
+│
+├── Docker  [Dockerfiles, docker and Singularity images necessary to run the various mimicINT workflows]
+│   ├── data_parse
+│   │   ├── dockerfile
+│   │   ├── readme.txt
+│   │   └── tagc-mimicint-data-parse.img [Singularity image]
+│   ├── domain_detect
+│   │   ├── dockerfile
+│   │   ├── readme.txt
+│   │   └── tagc-mimicint-domain-detect.img [Singularity image]
+│   ├── slim_detect
+│   │   ├── dockerfile
+│   │   ├── readme.txt
+│   │   ├── iupred.tar.gz [IUPred binaries archive]
+│   │   ├── ncbi-blast-2.7.1+-x64-linux.tar.gz [Blast binaries archive]
+│   │   └── tagc-mimicint-slim-detect.img [Singularity image]
+│   ├── create_all_singularity2.sh [Allows to create all the singularity images (.img)
+│   │                               in the same directories than the dockerfiles]
+│   ├── create_all_singularity3.sh [Allows to create all the singularity images (.sif)
+│   │                               in the same directories than the dockerfiles]
+│   └── docker_to_singularity.sh [Create a singularity image from a dockerfile]
+│
+└── script
+    ├── miscellaneous   [Miscellaneous scripts]
+    ├── prepare_run     [Scripts helping to prepare a new run]
+    │   └── prepare_tool_folder.sh [Allows to create a tools/iupred folder containing the
+    │                               IUPred executables necessary to run SLiMProb]
+    └── prepare_input   [Scripts helping to prepare the inputs]
+        ├── download_input_files.sh [Download all the inputs publicly available - 
+        │                            See below for more information]
+        ├── download_interpro_annotations_for_proteome.py [Download from the EBI all the InterPro annotations 
+        │                                                  for all the reviewed proteins from a proteome.]
+        ├── download_pfam_interpro_mapping.py [Download all the Pfam entries with the InterPro in which they
+        │                                      have been integrated.]
+        └── rm_fasta_header_duplicates.py [Allows to remove the duplicates in the 
+                                           headers of a fasta file]

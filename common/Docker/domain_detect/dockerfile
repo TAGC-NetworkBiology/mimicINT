@@ -1,0 +1,73 @@
+FROM ubuntu:16.04
+
+#############################
+## Install Python3 and pip ##
+#############################
+
+RUN apt-get update \
+  && apt-get install -y python3-setuptools python3-docutils python3-flask \
+  && apt-get install -y python3-pip \
+  && pip3 install --upgrade pip \
+  && pip3 install setuptools
+
+#######################
+## Install Python2.7 ##
+#######################
+
+RUN apt-get install -y python2.7 \
+  && ln -s /usr/bin/python2.7 /usr/bin/python2
+
+#######################################
+## Ensure python 3 is default python ##
+#######################################
+
+ENV PATH /usr/local/bin:$PATH
+# http://bugs.python.org/issue19846
+# > At the moment, setting "LANG=C" on a Linux system *fundamentally breaks Python 3*, and that's not OK.
+ENV LANG C.UTF-8
+# Assign python default to python3
+RUN rm -f /usr/bin/python \
+  && ln -s /usr/bin/python3 /usr/bin/python \
+  && rm -f /usr/bin/pydoc \
+  && ln -s /usr/bin/pydoc3 /usr/bin/pydoc \
+  && rm -f /usr/bin/pygettext \
+  && ln -s /usr/bin/pygettext3 /usr/bin/pygettext
+
+########################         
+## Install Misc tools ##         
+########################
+RUN apt-get update \
+  && apt-get install -y wget \
+  && apt-get install -y joe \
+  && apt-get install -y less
+
+
+######################################
+## Install Java to run InterProScan ##
+######################################
+
+# Install tools for add-apt-repository
+RUN  apt-get update  && apt-get install -y \
+  software-properties-common \
+  python-software-properties
+
+# Install Oracle OpenJDK 11
+RUN mkdir -p /usr/lib/jvm \
+  && wget https://download.java.net/java/GA/jdk11/9/GPL/openjdk-11.0.2_linux-x64_bin.tar.gz \
+  && tar xvf openjdk-11.0.2_linux-x64_bin.tar.gz --directory /usr/lib/jvm/ \
+  && update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk-11.0.2/bin/java 1 \
+  && update-alternatives --install /usr/bin/javac javac /usr/lib/jvm/jdk-11.0.2/bin/javac 1
+    
+
+##########################
+## Install InterProScan ##
+##########################
+
+RUN mkdir /interproscan
+WORKDIR /interproscan
+RUN wget ftp://ftp.ebi.ac.uk/pub/software/unix/iprscan/5/5.52-86.0/interproscan-5.52-86.0-64-bit.tar.gz \
+  && tar zxvf interproscan-5.52-86.0-64-bit.tar.gz
+
+ENV PATH=$PATH:/interproscan/5.52-86.0
+
+WORKDIR /

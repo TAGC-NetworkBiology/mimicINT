@@ -1,0 +1,69 @@
+{
+    "documentation": {
+        "cmdline": "Use with: \
+                        snakemake \
+                            --cluster-config compute_slim_probability/config/config_cluster.json \
+                            --cluster 'sbatch -A {cluster.project} \
+                                         --job-name {cluster.job-name} \
+                                         --partition {cluster.partition} \
+                                         --time {cluster.time} \
+                                         --mincpus {cluster.mincpus} \
+                                         -N {cluster.nodes-number} \
+                                         --ntasks-per-core {cluster.ntasks-per-core} \
+                                         --hint {cluster.hint} \
+                                         --mem-per-cpu {cluster.mem-per-cpu} \
+                                         --output {cluster.output} \
+                                         --error {cluster.error} \
+                                         --mail-user {cluster.mail-user} \
+                                         --mail-type {cluster.mail-type}'"
+    },
+    "__default__" : {
+        "project"        : "projectID",
+        "job-name"       : "mimicINT_MonteCarloSimulation.{rule}",
+        "partition"      : "partitionName",
+        "time"           : "05:00:00",
+        "mincpus" : "1", 
+        "nodes-number"   : "1",
+        "ntasks-per-core" : "1",
+        "hint": "nomultithread",
+        "mem-per-cpu"    : "4000",
+        "output"         : "log/%j.%a.out",
+        "error"          : "log/%j.%a.err",
+        "mail-user"      : "your@email.fr",
+        "mail-type"      : "ALL"
+    },
+    "parse_elm" : {
+        "time"           : "00:05:00"
+    },
+    "detect_slim_viral_sqces" : {
+        "time"           : "00:05:00"
+    },   
+    "copy_masked_fasta_files" : {
+        "time"           : "00:05:00"
+    },   
+    "generate_randomized_sequences" : {
+        "time"           : "96:00:00",
+        "mincpus"        : "32",
+        "nodes-number"   : "4",
+        "hint": "compute_bound"
+    },   
+    "detect_slim_randomized_sqces" : {
+        "time"           : "72:00:00",
+        "mincpus" : "32",
+        "nodes-number"   : "2", 
+        "ntasks-per-core" : "30",
+        "hint": "compute_bound"
+    },
+    "compute_slim_likelihood" : {
+        "time"           : "24:00:00",
+        "mincpus" : "32",
+        "nodes-number"   : "2", 
+        "ntasks-per-core" : "30",
+        "hint": "compute_bound"
+    },
+    "plot_motif_distributions" : {
+        "time"           : "48:00:00",
+        "mincpus" : "1",
+        "mem-per-cpu"    : "6000"
+    }
+}

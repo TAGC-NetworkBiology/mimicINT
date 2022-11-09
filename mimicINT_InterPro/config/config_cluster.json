@@ -1,0 +1,40 @@
+{
+    "documentation": {
+        "cmdline": "Use with: \
+                    snakemake --cluster-config config/config_cluster.json \
+                              --cluster 'sbatch \
+                                         -A {cluster.project} \
+                                         --job-name {cluster.job-name} \
+                                         --partition {cluster.partition} \
+                                         --time {cluster.time} \
+                                         --mem {cluster.mem} \
+                                         -c {threads} \
+                                         --mail-user {cluster.mail-user} \
+                                         --mail-type {cluster.mail-type} \
+                                         --error {cluster.error} \
+                                         --output {cluster.output}'"
+    },
+    "__default__" : {
+        "job-name"       : "mimicint_InterPro.{rule}",
+        "project"        : "b143",
+        "partition"      : "skylake",
+        "time"           : "5:00:00",
+        "mem"            : 4000,
+        "output"         : "log/%j.%a.out",
+        "error"          : "log/%j.%a.err",
+        "mail-user"      : "your@email.fr",
+        "mail-type"      : "ALL"
+    },
+    "detect_slim_query" : {
+        "time"           : "1:00:00",
+        "mem"    : 4000
+    },
+    "detect_domain_query" : {
+        "time"           : "5:00:00",
+        "mem"            : 16000
+    },
+    "interaction_inference" : {
+        "time"           : "1:00:00",
+        "mem"            : 4000
+    }    
+}

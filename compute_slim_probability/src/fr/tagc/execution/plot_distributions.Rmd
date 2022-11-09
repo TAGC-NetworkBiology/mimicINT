@@ -1,0 +1,97 @@
+---
+title: "Computation of SLiM likelihoods | Motif occurrences distributions over sequences"
+author: "MimicInt"
+date: "`r format( Sys.time(), '%d/%m/%Y - %H:%M' ) `"
+output: 
+  html_document:
+  theme: cerulean
+toc: true
+toc_float: true
+toc_depth: 4
+number_sections: false
+code_folding: hide
+---
+  
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set( echo = TRUE, fig.width = 11, fig.height = 7.5 )
+```
+
+[//]: # "Load the libraries"
+```{r loadLibraries, echo=FALSE, warning=FALSE, message=FALSE}
+library( ggplot2 )
+library( ggpubr )
+```
+
+```{r constants, echo=FALSE, warning=FALSE, message=FALSE}
+# Define the theme to use by default for all graph
+theme_set( theme_classic() )
+```
+
+```{r importData, echo=FALSE, warning=FALSE, message=FALSE}
+# Open file
+motif_occurrences = read.table( file = input_file_path, 
+                                header = TRUE,
+                                sep = '\t', 
+                                dec = '.' )
+
+motif_occurrences$motif = as.factor( motif_occurrences$motif )
+motif_occurrences$strain = as.factor( motif_occurrences$strain )
+motif_occurrences$sequence = as.factor( motif_occurrences$sequence )
+motif_occurrences$rdm_occ_counts = as.character( motif_occurrences$rdm_occ_counts )
+
+summary( motif_occurrences )
+```
+
+```{r displayDistributions, results='asis', echo=FALSE, warning=FALSE, message=FALSE}
+
+cat( '\n' )
+
+# Order the rows of the data frame by motif, 
+# then strain, then sequence
+motif_occurrences = motif_occurrences[ with( motif_occurrences, order( motif, strain, sequence ) ), ]
+
+# Split the data frame into a list
+motif_occurrences_list = split( motif_occurrences, f = motif_occurrences$motif, drop = TRUE )
+
+
+for ( motif_occ_df in motif_occurrences_list ){
+  
+  # Get the name of the motif
+  motif = motif_occ_df[ 1, 'motif' ]
+  
+  cat( paste0( '\n# ' , motif ) )
+  
+  # Make plot and store them into a list
+  plot_list = list()
+  for ( k in 1:nrow( motif_occ_df ) ){
+    
+    strain = motif_occ_df[ k, 'strain' ]
+    seq = motif_occ_df[ k, 'sequence' ]
+    values = as.numeric( strsplit( as.character( motif_occ_df[ k, 'rdm_occ_counts' ] ), ',' )[[ 1 ]] )
+    
+    # Make the histogram
+    h = ggplot( as.data.frame( values ), aes( x=values ) ) +
+          geom_histogram( aes(y=..density..), 
+                          binwidth = 1,
+                          color = 'black',
+                          fill = 'grey' ) +
+          geom_density( aes(values, ..scaled..), alpha = .2, fill='blue' ) +
+          scale_x_continuous( breaks = seq( min( values ), max( values ) ), 
+                              labels = as.character( seq( min( values ), max( values ) ) ) ) +
+          xlab( paste0( strain, ', ', seq ) ) +
+          ylab( '' )
+    
+    # Add the histogram to the list
+    plot_list[[ k ]] = h
+  }
+  
+  # Display all the histograms for this motif on the same plot
+  ggarrange( plotlist= plot_list )
+  
+  print( annotate_figure( ggarrange( plotlist= plot_list ),
+                          left = 'Counts',
+                          fig.lab = 'Number of occurrences of the motif ', 
+                          fig.lab.pos = 'bottom' ) )
+}
+```

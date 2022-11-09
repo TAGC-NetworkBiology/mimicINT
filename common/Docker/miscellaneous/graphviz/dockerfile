@@ -1,0 +1,5 @@
+FROM ubuntu:18.04
+
+# Install Graphviz 
+# (usefull to generate the pipeline DAG as a .png file)
+RUN apt-get update && apt-get install -y graphviz

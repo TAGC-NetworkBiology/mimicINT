@@ -1,0 +1,80 @@
+## This dockerfile build the image that contains the environment necessary for the MimicINT pipeline
+##
+## AZ 2018-10-10
+
+
+FROM ubuntu:16.04
+
+
+
+############################
+## Install GNU C compiler ##
+############################
+
+RUN apt-get update && apt-get install -y software-properties-common \
+  && add-apt-repository ppa:ubuntu-toolchain-r/test \
+  && apt-get update \
+  && apt-get -y install gcc-5 g++-5 \
+  && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 60 --slave /usr/bin/g++ g++ /usr/bin/g++-5
+
+#######################
+## Install Python2.7 ##
+#######################
+RUN apt-get install -y python2.7
+
+####################
+## Install IUPred ##
+####################
+
+WORKDIR /
+ADD iupred.tar.gz /
+
+WORKDIR /iupred
+RUN gcc iupred.c -o iupred \
+  && chmod u+w /iupred \
+  && ln -s /iupred/iupred /usr/bin/iupred
+ENV PATH=$PATH:/iupred
+ENV IUPred_PATH=/iupred
+
+
+
+########################         
+## Install Misc tools ##         
+########################
+
+RUN apt-get install -y wget \
+  && apt-get install -y joe \
+  && apt-get install -y less
+
+#####################################
+## Install Sequence Aligment tools ##
+#####################################
+
+RUN apt-get install -y clustalw \
+  clustalo \
+  muscle
+
+###################
+## Install BLAST ##
+###################
+
+WORKDIR /usr
+ADD ncbi-blast-2.7.1+-x64-linux.tar.gz /usr
+ENV PATH=$PATH:/usr/ncbi-blast-2.7.1+/bin
+ENV blastpath=/usr/ncbi-blast-2.7.1+/bin
+
+RUN mkdir /blastdb
+ENV BLASTDB=/blastdb
+
+#######################
+## Install SLiMSuite ##
+#######################
+
+RUN mkdir /SLiMSuite
+WORKDIR /SLiMSuite
+RUN wget https://github.com/slimsuite/SLiMSuite/releases/download/v1.4.0/slimsuite.2018-07-02.tgz \
+  && tar zxvf slimsuite.2018-07-02.tgz
+
+ENV PATH=$PATH:/SLiMSuite/slimsuite/tools
+
+WORKDIR /

@@ -1,0 +1,78 @@
+##########################################
+## Configuration file for the snakefile ##
+## for the computation of SLiM          ##
+## probabilities                        ##
+##########################################
+
+# See the documentation for information about available options.
+
+# Input files
+# -----------
+
+# ELM classes
+elm_classes_file: input/elm/elm_classes.tsv
+# ELM instances
+elm_instances_file: input/elm/elm_instances_all_tp.tsv
+
+# Viral sequences folder
+viral_sequence_folder: input/sequences/cov_uniq_acc
+
+
+# Parameter file log
+# ------------------
+
+# Path to the file logging the parameters provided by the
+# user or automatically set
+log_parameters_file: log/parameters.tsv
+
+
+# Output folder
+# -------------
+
+# Define output folder for all rules
+output_folder: output/MimicINT_Randomizations
+
+
+# General parameters
+# ------------------
+
+# Number of shuffled fasta files to generate
+randomization_count: 100000
+
+# Backgrounds to use
+background_flag_code: 3
+
+# Should the number of occurrence of each motifs in each
+# shuffled sequence be recorded?
+get_distributions: True
+
+
+# SLiM-related options
+# --------------------
+
+  # ELM files parsing options
+  # -------------------------
+  
+# Cut-off to use to filter the ELM classes based on their 
+# probability of occurrence
+pval_threshold_elm_parser: 0.01
+
+
+  # SLiMProb options
+  # ----------------
+  
+# Maximum dataset size to process in amino acids
+maxsize: 1000000000
+
+# Maximum number of sequences to process
+maxseq: 10000
+
+# Minimum number of consecutive residues that must have 
+# the same disorder state
+minregion: 5
+
+# Cut-off for IUPred results
+iucut: 0.2
+
+# IUPred method to use
+iumethod: long

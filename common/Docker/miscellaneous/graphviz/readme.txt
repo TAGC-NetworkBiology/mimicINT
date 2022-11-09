@@ -1,0 +1,4 @@
+
+This image contains:
+
+ - graphviz

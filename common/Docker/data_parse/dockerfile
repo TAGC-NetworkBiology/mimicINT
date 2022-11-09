@@ -1,0 +1,28 @@
+## This dockerfile build the image that contains the environment necessary for the MimicINT pipeline
+##
+## AZ 2018-10-10
+
+
+FROM python:3.5
+
+
+RUN apt-get update && apt-get install -y python3-pip
+
+#############################
+## Install Python3 modules ##
+#############################
+
+WORKDIR /
+
+# Install click
+# NB: is no longer useful for the pipeline,
+#     but let for retro-compatibility 
+RUN pip3 install click
+
+# Install pandas
+RUN pip3 install pandas
+
+# Install scipy
+RUN pip3 install scipy
+
+WORKDIR /

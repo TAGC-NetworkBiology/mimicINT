@@ -1,0 +1,146 @@
+##########################################
+## Configuration file for the snakefile ##
+##########################################
+
+# See the documentation for information about available options.
+
+# Input files
+# -----------
+
+## Path to the 3did template file
+3did_flat_file: input/3did/3did_flat_20200620
+
+## Path to the ELM files
+# ELM classes
+elm_classes_file: input/elm/elm_classes_20200620.tsv
+# ELM instances
+elm_instances_file: input/elm/elm_instances_hsapiens_tp_20200620.tsv
+# Binding domains
+elm_interaction_domains_file: input/elm/elm_interaction_domains_20200620.tsv
+
+# Path to the file containing InterPro annotations for all target sequences
+target_interpro_annotations_file: input/InterPro/hsapiens_interpro_annotations_20210812.tsv
+
+# Path to the query fasta file
+query_fasta_file: input/sequences/EHEC_effectors.fasta
+
+# Path to the Pfam - InterPro cross-reference file
+pfam_interpro_mapping_file: input/InterPro/pfam_interpro_mapping_20210812.tsv
+
+
+
+# General parameters
+# ------------------
+
+# Target species
+target_species_short: hsapiens
+
+# Should the sequence identifiers be used instead of 
+# the full fasta headers in output files
+simplify_seq_names: True
+
+
+# Log files
+# ---------
+
+# Path to the file logging the parameters provided by the
+# user or automatically set
+log_parameters_file: log/parameters.tsv
+
+# Path to the folder where placeholder have to be written
+job_status_folder: job_status
+
+
+# Output folders
+# --------------
+
+# Define output folder for all rules
+output_folder: output/mimicINT_InterPro
+
+
+
+# Domain detection options
+# ------------------------
+
+# E-value (score) threshold for interproscan
+# occurence to be kept for the target sequences
+score_threshold_interpro_target: 0.00001
+
+
+# E-value (score) threshold for interproscan
+# occurence to be kept for the target sequences
+score_threshold_interpro_query: 0.00001
+
+
+# SLiM-related options
+# --------------------
+
+  # ELM files parsing options
+  # -------------------------
+  
+# Cut-off to use to filter the ELM classes based on their 
+# probability of occurrence
+pval_threshold_elm_parser: 1
+
+# Cut-off to use to filter the ELM classes based on the
+# p-values computed with the compute_slim_probability_v2
+# workflow
+# (NB: This workflow computes an unique p-value for each ELM)
+slim_pvalues_v2_file: slim_probabilities.tsv
+pval_threshold_elm_filter: 0.05
+
+
+  # SLiMProb options
+  # ----------------
+  
+# Maximum dataset size to process in amino acids
+maxsize: 1000000000
+
+# Maximum number of sequences to process
+maxseq: 10000
+
+# Minimum number of consecutive residues that must have 
+# the same disorder state
+minregion: 10
+
+# IUPred method to use
+iumethod: short
+
+# Cut-off for IUPred results
+iucut: 0.4
+
+
+# Domain score filter
+# ------------------- 
+
+# Domain score file
+domain_score_file: domain_scores_202008.txt
+
+# Type of domain score filter (A or D)
+domain_score_filter: D
+
+# Domain score threshold (only if 'D' type selected)
+domain_score_threshold: 0.4
+
+# Should the position of the domain on the protein 
+# be considered?
+# What minimal overlaps between positions predicted
+# by InterProScan and those provided by the domain
+# score file are required? 
+domain_score_position: True
+domain_score_overlap_dscore_to_dmi: 0.8
+domain_score_overlap_dmi_to_dscore: 0.8
+
+
+# gProfiler
+# ---------
+
+# gProfiler version (URL)
+gprofiler_url: http://biit.cs.ut.ee/gprofiler
+
+# Ontologies
+gprofiler_sources: GO,KEGG
+
+# Correction method and threshold
+gprofiler_correction_method: fdr
+gprofiler_signif_threshold: 0.01
