@@ -5,6 +5,6 @@ This image contains:
  - Python 2.7
  - IUPred 
  - Blast+
- - ClustalW, CLustalO, MUSCLE
+ - ClustalW, CLustalOmega, MUSCLE
  - SLiM suite
  - joe (Emacs editor)
