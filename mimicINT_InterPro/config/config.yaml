@@ -8,24 +8,24 @@
 # -----------
 
 ## Path to the 3did template file
-3did_flat_file: input/3did/3did_flat_20200620
+3did_flat_file: input/3did_flat
 
 ## Path to the ELM files
 # ELM classes
-elm_classes_file: input/elm/elm_classes_20200620.tsv
+elm_classes_file: input/elm_classes.tsv
 # ELM instances
-elm_instances_file: input/elm/elm_instances_hsapiens_tp_20200620.tsv
+elm_instances_file: input/elm_instances.tsv
 # Binding domains
-elm_interaction_domains_file: input/elm/elm_interaction_domains_20200620.tsv
+elm_interaction_domains_file: input/elm_interaction_domains.tsv
 
 # Path to the file containing InterPro annotations for all target sequences
-target_interpro_annotations_file: input/InterPro/hsapiens_interpro_annotations_20210812.tsv
+target_interpro_annotations_file: input/hsapiens_interpro_annotations.tsv
 
-# Path to the query fasta file
-query_fasta_file: input/sequences/EHEC_effectors.fasta
+# Path to the query fasta file (e.g.: Marburg virus)
+query_fasta_file: input/MARV.fasta
 
 # Path to the Pfam - InterPro cross-reference file
-pfam_interpro_mapping_file: input/InterPro/pfam_interpro_mapping_20210812.tsv
+pfam_interpro_mapping_file: input/pfam_interpro_mapping.tsv
 
 
 
@@ -86,9 +86,8 @@ pval_threshold_elm_parser: 1
 # p-values computed with the compute_slim_probability_v2
 # workflow
 # (NB: This workflow computes an unique p-value for each ELM)
-slim_pvalues_v2_file: slim_probabilities.tsv
+slim_pvalues_v2_file: ""
 pval_threshold_elm_filter: 0.05
-
 
   # SLiMProb options
   # ----------------
@@ -114,7 +113,7 @@ iucut: 0.4
 # ------------------- 
 
 # Domain score file
-domain_score_file: domain_scores_202008.txt
+domain_score_file: ""
 
 # Type of domain score filter (A or D)
 domain_score_filter: D

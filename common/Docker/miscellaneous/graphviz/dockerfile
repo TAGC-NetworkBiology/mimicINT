@@ -1,5 +1,11 @@
 FROM ubuntu:18.04
 
+FROM python:3.7
+
 # Install Graphviz 
 # (usefull to generate the pipeline DAG as a .png file)
 RUN apt-get update && apt-get install -y graphviz
+
+RUN apt-get update && apt-get install -y python3-pip
+
+RUN pip3 install snakemake

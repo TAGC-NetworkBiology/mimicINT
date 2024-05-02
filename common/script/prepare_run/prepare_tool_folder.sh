@@ -16,6 +16,6 @@ fi
 if [ ! -d "tools/iupred" ]
 then
 	singularity exec -B $(pwd)/tools:$(pwd)/tools \
-	            common/Docker/slim_detect/tagc-mimicint-slim-detect.img \
+	            common/Docker/slim_detect/tagc-mimicint-slim-detect.sif \
 	            cp -R /iupred $(pwd)/tools
 fi

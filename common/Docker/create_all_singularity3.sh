@@ -1,14 +1,10 @@
 #!/bin/bash
 
-docker pull quay.io/singularity/docker2singularity
-
 # This script allows to prepare all the singularity images
 # necessary to run the Mimicint pipeline.
 
 # Get the working directory / workspace
 MIMICINT_WORKING_DIR=$(pwd)
-
-
 
 # =========================================================
 # Constants
@@ -57,57 +53,34 @@ SINGULARITY_IMAGE_GRAPHVIZ=tagc-mimicint-misc-graphviz
 
 # Data parse
 docker build -t ${SINGULARITY_IMAGE_DATAPARSE} ${DATAPARSE_DOCKERFILE_DIR}
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ${DATAPARSE_DOCKERFILE_DIR}:/output \
-  --privileged -t --rm \
-  quay.io/singularity/docker2singularity ${SINGULARITY_IMAGE_DATAPARSE}
-mv ${DATAPARSE_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_DATAPARSE}*.sif ${DATAPARSE_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_DATAPARSE}.sif
+sudo singularity build ${SINGULARITY_IMAGE_DATAPARSE}.sif docker-daemon://${SINGULARITY_IMAGE_DATAPARSE}:latest
+sudo chown $(whoami):$(whoami) ${SINGULARITY_IMAGE_DATAPARSE}.sif
+
   
 # Domain detect
 docker build -t ${SINGULARITY_IMAGE_DOMAINDETECT} ${DOMAINDETECT_DOCKERFILE_DIR}
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ${DOMAINDETECT_DOCKERFILE_DIR}:/output \
-  --privileged -t --rm \
-  quay.io/singularity/docker2singularity ${SINGULARITY_IMAGE_DOMAINDETECT}
-mv ${DOMAINDETECT_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_DOMAINDETECT}*.sif ${DOMAINDETECT_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_DOMAINDETECT}.sif
+sudo singularity build ${SINGULARITY_IMAGE_DOMAINDETECT}.sif docker-daemon://${SINGULARITY_IMAGE_DOMAINDETECT}:latest
+sudo chown $(whoami):$(whoami) ${SINGULARITY_IMAGE_DOMAINDETECT}.sif
 
 # SLiM detect
 docker build -t ${SINGULARITY_IMAGE_SLIMDETECT} ${SLIMDETECT_DOCKERFILE_DIR}
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ${SLIMDETECT_DOCKERFILE_DIR}:/output \
-  --privileged -t --rm \
-  quay.io/singularity/docker2singularity ${SINGULARITY_IMAGE_SLIMDETECT}
-mv ${SLIMDETECT_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_SLIMDETECT}*.sif ${SLIMDETECT_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_SLIMDETECT}.sif
+sudo singularity build ${SINGULARITY_IMAGE_SLIMDETECT}.sif docker-daemon://${SINGULARITY_IMAGE_SLIMDETECT}:latest
+sudo chown $(whoami):$(whoami) ${SINGULARITY_IMAGE_SLIMDETECT}.sif
   
 # R
 docker build -t ${SINGULARITY_IMAGE_R} ${R_DOCKERFILE_DIR}
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ${R_DOCKERFILE_DIR}:/output \
-  --privileged -t --rm \
-  quay.io/singularity/docker2singularity ${SINGULARITY_IMAGE_R}
-mv ${R_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_R}*.sif ${R_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_R}.sif
+sudo singularity build ${SINGULARITY_IMAGE_R}.sif docker-daemon://${SINGULARITY_IMAGE_R}:latest
+sudo chown $(whoami):$(whoami) ${SINGULARITY_IMAGE_R}.sif
 
 # Rstudio
 docker build -t ${SINGULARITY_IMAGE_RSTUDIO} ${RSTUDIO_DOCKERFILE_DIR}
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ${RSTUDIO_DOCKERFILE_DIR}:/output \
-  --privileged -t --rm \
-  quay.io/singularity/docker2singularity ${SINGULARITY_IMAGE_RSTUDIO}
-mv ${RSTUDIO_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_RSTUDIO}*.sif ${RSTUDIO_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_RSTUDIO}.sif
-  
+sudo singularity build ${SINGULARITY_IMAGE_RSTUDIO}.sif docker-daemon://${SINGULARITY_IMAGE_RSTUDIO}:latest
+sudo chown $(whoami):$(whoami) ${SINGULARITY_IMAGE_RSTUDIO}.sif
+ 
   
 # Miscellaneous
 # Graphviz
 docker build -t ${SINGULARITY_IMAGE_GRAPHVIZ} ${GRAPHVIZ_DOCKERFILE_DIR}
-docker run -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ${GRAPHVIZ_DOCKERFILE_DIR}:/output \
-  --privileged -t --rm \
-  quay.io/singularity/docker2singularity ${SINGULARITY_IMAGE_RSTUDIO}
-mv ${GRAPHVIZ_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_GRAPHVIZ}*.sif ${GRAPHVIZ_DOCKERFILE_DIR}/${SINGULARITY_IMAGE_GRAPHVIZ}.sif
+sudo singularity build ${SINGULARITY_IMAGE_GRAPHVIZ}.sif docker-daemon://${SINGULARITY_IMAGE_GRAPHVIZ}:latest
+sudo chown $(whoami):$(whoami) ${SINGULARITY_IMAGE_GRAPHVIZ}.sif
 
-
-# =========================================================
-# Change ownership of the Singularity images
-# =========================================================
-
-sudo chown -R $USER:$USER ${CONTAINER_DIR}

@@ -46,6 +46,7 @@ RUN apt-get update \
   && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
   && locale-gen en_US.utf8 \
   && /usr/sbin/update-locale LANG=en_US.UTF-8 \
+  && timedatectl set-timezone UTC
   && BUILDDEPS="curl \
     default-jdk \
     libbz2-dev \
@@ -236,33 +237,33 @@ RUN apt-get update \
   && apt-get install -y libxml2-dev
 
 # Install Bioconductor packages
-RUN R -e 'install.packages("BiocManager")'
+RUN R -e 'install.packages("BiocManager", repos ="http://cran.rstudio.com")'
 
 # Install R packages
-RUN R -e 'install.packages("ggplot2")'
-RUN R -e 'install.packages("plotly")'
-RUN R -e 'install.packages("ggalluvial")'
-RUN R -e 'install.packages("gridExtra")'
-RUN R -e 'install.packages("ggpubr")'
-RUN R -e 'install.packages("getopt")'
+RUN R -e 'install.packages("ggplot2", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("plotly", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("ggalluvial", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("gridExtra", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("ggpubr", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("getopt", repos ="http://cran.rstudio.com")'
 
 # Install packages for knitr and markdown
-RUN R -e 'install.packages("knitr")'
-RUN R -e 'install.packages("kableExtra")'
-RUN R -e 'install.packages("formatR")'
-RUN R -e 'install.packages("xtable")'
+RUN R -e 'install.packages("knitr", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("kableExtra", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("formatR", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("xtable", repos ="http://cran.rstudio.com")'
 
 # Install Datatable packages to have widget tables for reporting
-RUN R -e 'install.packages("devtools")'
-RUN R -e 'devtools::install_github("ramnathv/htmlwidgets")'
-RUN R -e 'devtools::install_github("rstudio/DT")'
-RUN R -e 'install.packages("htmltools")'
-#RUN R -e 'install.packages("d3heatmap")'
+RUN R -e 'install.packages("devtools", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("htmlwidgets", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("DT", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("htmltools", repos ="http://cran.rstudio.com")'
+#RUN R -e 'install.packages("d3heatmap", repos ="http://cran.rstudio.com")'
 
 RUN apt-get update && apt-get install -y libcairo2-dev
-RUN R -e 'install.packages("gdtools")'
-RUN R -e 'install.packages("rvg")'
-RUN R -e 'devtools::install_github("davidgohel/ggiraph")'
+RUN R -e 'install.packages("gdtools", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("rvg", repos ="http://cran.rstudio.com")'
+RUN R -e 'install.packages("ggiraph", repos ="http://cran.rstudio.com")'
 
 
 # ===========================================
